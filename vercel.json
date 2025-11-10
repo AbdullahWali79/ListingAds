@@ -1,12 +1,17 @@
 {
   "version": 2,
-  "buildCommand": "cd frontend && npm run build",
+  "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/.next",
   "installCommand": "cd backend && npm install && cd ../frontend && npm install",
+  "framework": "nextjs",
+  "rootDirectory": "frontend",
   "builds": [
     {
       "src": "frontend/package.json",
-      "use": "@vercel/next"
+      "use": "@vercel/next",
+      "config": {
+        "zeroConfig": true
+      }
     },
     {
       "src": "api/index.js",

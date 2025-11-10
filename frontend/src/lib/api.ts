@@ -81,6 +81,7 @@ export const adminApi = {
   getAllUsers: () => api.get('/admin/users'),
   getAuditLogs: (params?: { limit?: number; offset?: number }) =>
     api.get('/admin/audit-logs', { params }),
+  getStats: () => api.get('/admin/stats'),
 };
 
 export default api;

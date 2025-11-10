@@ -232,5 +232,123 @@ router.get('/audit-logs', async (req, res) => {
   }
 });
 
+// Get dashboard stats
+router.get('/stats', async (req, res) => {
+  try {
+    // Total users
+    const usersResult = await pool.query('SELECT COUNT(*) as count FROM users');
+    const totalUsers = parseInt(usersResult.rows[0].count);
+    
+    // Users this month
+    const usersThisMonthResult = await pool.query(
+      `SELECT COUNT(*) as count FROM users 
+       WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)`
+    );
+    const usersThisMonth = parseInt(usersThisMonthResult.rows[0].count);
+    const usersLastMonthResult = await pool.query(
+      `SELECT COUNT(*) as count FROM users 
+       WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+       AND created_at < DATE_TRUNC('month', CURRENT_DATE)`
+    );
+    const usersLastMonth = parseInt(usersLastMonthResult.rows[0].count);
+    const usersChange = usersLastMonth > 0 
+      ? ((usersThisMonth - usersLastMonth) / usersLastMonth * 100).toFixed(1)
+      : '0.0';
+
+    // Total ads
+    const adsResult = await pool.query('SELECT COUNT(*) as count FROM ads');
+    const totalAds = parseInt(adsResult.rows[0].count);
+    
+    // Ads this month
+    const adsThisMonthResult = await pool.query(
+      `SELECT COUNT(*) as count FROM ads 
+       WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)`
+    );
+    const adsThisMonth = parseInt(adsThisMonthResult.rows[0].count);
+    const adsLastMonthResult = await pool.query(
+      `SELECT COUNT(*) as count FROM ads 
+       WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+       AND created_at < DATE_TRUNC('month', CURRENT_DATE)`
+    );
+    const adsLastMonth = parseInt(adsLastMonthResult.rows[0].count);
+    const adsChange = adsLastMonth > 0 
+      ? ((adsThisMonth - adsLastMonth) / adsLastMonth * 100).toFixed(1)
+      : '0.0';
+
+    // Pending payments
+    const pendingPaymentsResult = await pool.query(
+      `SELECT COUNT(*) as count FROM payments WHERE status = 'pending'`
+    );
+    const pendingPayments = parseInt(pendingPaymentsResult.rows[0].count);
+    
+    // Pending payments this week
+    const pendingThisWeekResult = await pool.query(
+      `SELECT COUNT(*) as count FROM payments 
+       WHERE status = 'pending' AND created_at >= CURRENT_DATE - INTERVAL '7 days'`
+    );
+    const pendingThisWeek = parseInt(pendingThisWeekResult.rows[0].count);
+    const pendingLastWeekResult = await pool.query(
+      `SELECT COUNT(*) as count FROM payments 
+       WHERE status = 'pending' 
+       AND created_at >= CURRENT_DATE - INTERVAL '14 days'
+       AND created_at < CURRENT_DATE - INTERVAL '7 days'`
+    );
+    const pendingLastWeek = parseInt(pendingLastWeekResult.rows[0].count);
+    const pendingChange = pendingLastWeek > 0 
+      ? ((pendingThisWeek - pendingLastWeek) / pendingLastWeek * 100).toFixed(1)
+      : '0.0';
+
+    // Approved ads
+    const approvedAdsResult = await pool.query(
+      `SELECT COUNT(*) as count FROM ads WHERE status = 'approved'`
+    );
+    const approvedAds = parseInt(approvedAdsResult.rows[0].count);
+    
+    // Approved ads this month
+    const approvedThisMonthResult = await pool.query(
+      `SELECT COUNT(*) as count FROM ads 
+       WHERE status = 'approved' 
+       AND updated_at >= DATE_TRUNC('month', CURRENT_DATE)`
+    );
+    const approvedThisMonth = parseInt(approvedThisMonthResult.rows[0].count);
+    const approvedLastMonthResult = await pool.query(
+      `SELECT COUNT(*) as count FROM ads 
+       WHERE status = 'approved' 
+       AND updated_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+       AND updated_at < DATE_TRUNC('month', CURRENT_DATE)`
+    );
+    const approvedLastMonth = parseInt(approvedLastMonthResult.rows[0].count);
+    const approvedChange = approvedLastMonth > 0 
+      ? ((approvedThisMonth - approvedLastMonth) / approvedLastMonth * 100).toFixed(1)
+      : '0.0';
+
+    res.json({
+      totalUsers: {
+        value: totalUsers,
+        change: usersChange,
+        period: 'this month'
+      },
+      totalAds: {
+        value: totalAds,
+        change: adsChange,
+        period: 'this month'
+      },
+      pendingPayments: {
+        value: pendingPayments,
+        change: pendingChange,
+        period: 'this week'
+      },
+      approvedAds: {
+        value: approvedAds,
+        change: approvedChange,
+        period: 'this month'
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
 export default router;
 

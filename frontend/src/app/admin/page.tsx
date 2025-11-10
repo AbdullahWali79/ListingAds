@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
-import { getUser } from '@/lib/auth';
+import Link from 'next/link';
+import { getUser, logout } from '@/lib/auth';
 import { adminApi } from '@/lib/api';
 import Toast from '@/components/Toast';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -22,6 +22,22 @@ interface PendingPayment {
   created_at: string;
 }
 
+interface Ad {
+  id: number;
+  title: string;
+  status: string;
+  category_name: string;
+  seller_name: string;
+  created_at: string;
+}
+
+interface Stats {
+  totalUsers: { value: number; change: string; period: string };
+  totalAds: { value: number; change: string; period: string };
+  pendingPayments: { value: number; change: string; period: string };
+  approvedAds: { value: number; change: string; period: string };
+}
+
 interface ToastState {
   message: string;
   type: 'success' | 'error' | 'info';
@@ -30,7 +46,9 @@ interface ToastState {
 export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'payments' | 'ads' | 'users'>('payments');
+  const [activeNav, setActiveNav] = useState<'overview' | 'ads' | 'payments' | 'categories' | 'users'>('overview');
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [recentAds, setRecentAds] = useState<Ad[]>([]);
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [ads, setAds] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -53,6 +71,8 @@ export default function AdminDashboard() {
         return;
       }
       setUser(currentUser);
+      fetchStats();
+      fetchRecentAds();
       fetchPendingPayments();
     } catch (error) {
       console.error('Error in admin page:', error);
@@ -62,14 +82,37 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'ads') {
+    if (activeNav === 'ads') {
       fetchAds();
-    } else if (activeTab === 'users') {
+    } else if (activeNav === 'users') {
       fetchUsers();
-    } else if (activeTab === 'payments') {
+    } else if (activeNav === 'payments') {
       fetchPendingPayments();
+    } else if (activeNav === 'overview') {
+      fetchStats();
+      fetchRecentAds();
     }
-  }, [activeTab]);
+  }, [activeNav]);
+
+  const fetchStats = async () => {
+    try {
+      const response = await adminApi.getStats();
+      setStats(response.data);
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRecentAds = async () => {
+    try {
+      const response = await adminApi.getAllAds({ limit: 5 });
+      setRecentAds(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch recent ads:', error);
+    }
+  };
 
   const fetchPendingPayments = async () => {
     try {
@@ -80,7 +123,6 @@ export default function AdminDashboard() {
       console.error('Failed to fetch pending payments:', error);
       const errorMsg = error.response?.data?.error || error.message || 'Failed to fetch pending payments';
       showToast(errorMsg, 'error');
-      // If unauthorized, redirect to login
       if (error.response?.status === 401) {
         router.push('/login');
       }
@@ -133,6 +175,8 @@ export default function AdminDashboard() {
       setShowApproveModal(false);
       setSelectedPayment(null);
       fetchPendingPayments();
+      fetchStats();
+      fetchRecentAds();
     } catch (error: any) {
       showToast(error.response?.data?.error || 'Failed to approve payment', 'error');
     }
@@ -161,81 +205,304 @@ export default function AdminDashboard() {
       await adminApi.approveAd(adId);
       showToast('Ad approved successfully!', 'success');
       fetchAds();
+      fetchRecentAds();
+      fetchStats();
     } catch (error: any) {
       showToast(error.response?.data?.error || 'Failed to approve ad', 'error');
     }
   };
 
   const getStatusBadge = (status: string) => {
-    const colors: any = {
-      approved: '#28a745',
-      pending_admin_approval: '#ffc107',
-      pending_verification: '#17a2b8',
-      rejected: '#dc3545',
+    const statusMap: { [key: string]: { bg: string; color: string; text: string } } = {
+      approved: { bg: '#d4edda', color: '#155724', text: 'Approved' },
+      pending_admin_approval: { bg: '#fff3cd', color: '#856404', text: 'Pending' },
+      pending_verification: { bg: '#d1ecf1', color: '#0c5460', text: 'Pending Verification' },
+      rejected: { bg: '#f8d7da', color: '#721c24', text: 'Rejected' },
     };
+    const statusInfo = statusMap[status] || { bg: '#e2e3e5', color: '#383d41', text: status };
     return (
       <span
         style={{
-          padding: '5px 10px',
-          borderRadius: '5px',
-          background: colors[status] || '#6c757d',
-          color: 'white',
+          padding: '6px 12px',
+          borderRadius: '20px',
+          background: statusInfo.bg,
+          color: statusInfo.color,
           fontSize: '12px',
+          fontWeight: '600',
         }}
       >
-        {status.replace('_', ' ').toUpperCase()}
+        {statusInfo.text}
       </span>
     );
   };
 
-  return (
-    <>
-      <Navbar />
-      <div className="container" style={{ paddingTop: '40px', paddingBottom: '40px' }}>
-        <h1 style={{ marginBottom: '30px' }}>Admin Dashboard</h1>
+  const handleLogout = () => {
+    logout();
+    router.push('/');
+  };
 
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', borderBottom: '2px solid #ddd' }}>
-          <button
-            onClick={() => setActiveTab('payments')}
-            className="btn"
-            style={{
-              background: activeTab === 'payments' ? '#0070f3' : 'transparent',
-              color: activeTab === 'payments' ? 'white' : 'black',
-              border: 'none',
-              borderBottom: activeTab === 'payments' ? '3px solid #0070f3' : 'none',
-            }}
-          >
-            Pending Payments ({pendingPayments.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('ads')}
-            className="btn"
-            style={{
-              background: activeTab === 'ads' ? '#0070f3' : 'transparent',
-              color: activeTab === 'ads' ? 'white' : 'black',
-              border: 'none',
-              borderBottom: activeTab === 'ads' ? '3px solid #0070f3' : 'none',
-            }}
-          >
-            All Ads
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className="btn"
-            style={{
-              background: activeTab === 'users' ? '#0070f3' : 'transparent',
-              color: activeTab === 'users' ? 'white' : 'black',
-              border: 'none',
-              borderBottom: activeTab === 'users' ? '3px solid #0070f3' : 'none',
-            }}
-          >
-            Users
-          </button>
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f4f8' }}>
+      {/* Sidebar */}
+      <div style={{
+        width: '250px',
+        background: 'white',
+        boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'fixed',
+        height: '100vh',
+        overflowY: 'auto'
+      }}>
+        {/* Logo */}
+        <div style={{ padding: '20px', borderBottom: '1px solid #e5e7eb' }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+            <span style={{ fontSize: '24px', color: '#0070f3' }}>📋</span>
+            <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#0070f3' }}>Classifieds</span>
+          </Link>
         </div>
 
-        {activeTab === 'payments' && (
+        {/* Navigation */}
+        <div style={{ flex: 1, padding: '20px 0' }}>
+          <nav style={{ display: 'flex', flexDirection: 'column' }}>
+            {[
+              { id: 'overview', label: 'Overview', icon: '📊' },
+              { id: 'ads', label: 'Manage Ads', icon: '📄' },
+              { id: 'payments', label: 'Payments', icon: '💳' },
+              { id: 'categories', label: 'Categories', icon: '📁' },
+              { id: 'users', label: 'Users', icon: '👥' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveNav(item.id as any)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '12px 20px',
+                  border: 'none',
+                  background: activeNav === item.id ? '#e0f2fe' : 'transparent',
+                  color: activeNav === item.id ? '#0070f3' : '#666',
+                  cursor: 'pointer',
+                  fontSize: '15px',
+                  fontWeight: activeNav === item.id ? '600' : '400',
+                  textAlign: 'left',
+                  width: '100%',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* User Info */}
+        <div style={{ padding: '20px', borderTop: '1px solid #e5e7eb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              background: '#e0e0e0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px'
+            }}>
+              👤
+            </div>
+            <div>
+              <div style={{ fontWeight: '600', fontSize: '14px' }}>{user?.name || 'Admin Name'}</div>
+              <div style={{ fontSize: '12px', color: '#666' }}>{user?.email || 'administrator@classifieds.c'}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => {}}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              border: 'none',
+              background: 'transparent',
+              color: '#666',
+              cursor: 'pointer',
+              fontSize: '14px',
+              width: '100%',
+              marginBottom: '8px'
+            }}
+          >
+            <span>⚙️</span>
+            <span>Settings</span>
+          </button>
+          <button
+            onClick={handleLogout}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              border: 'none',
+              background: 'transparent',
+              color: '#dc3545',
+              cursor: 'pointer',
+              fontSize: '14px',
+              width: '100%'
+            }}
+          >
+            <span>🚪</span>
+            <span>Logout</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div style={{ marginLeft: '250px', flex: 1, padding: '30px' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
           <div>
-            <h2 style={{ marginBottom: '20px' }}>Pending Payment Verifications</h2>
+            <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '5px', color: '#333' }}>
+              Dashboard Overview
+            </h1>
+            <p style={{ color: '#666', fontSize: '14px' }}>
+              Welcome back, {user?.name || 'Admin'}! Here's a summary of your activity.
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <input
+              type="text"
+              placeholder="Search..."
+              style={{
+                padding: '10px 15px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                fontSize: '14px',
+                width: '250px'
+              }}
+            />
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              background: '#e0e0e0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}>
+              👤
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        {activeNav === 'overview' && stats && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '40px' }}>
+              <div className="card" style={{ padding: '24px' }}>
+                <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Users</div>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '8px', color: '#333' }}>
+                  {stats.totalUsers.value.toLocaleString()}
+                </div>
+                <div style={{ fontSize: '13px', color: '#28a745' }}>
+                  +{stats.totalUsers.change}% {stats.totalUsers.period}
+                </div>
+              </div>
+              <div className="card" style={{ padding: '24px' }}>
+                <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Total Ads</div>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '8px', color: '#333' }}>
+                  {stats.totalAds.value.toLocaleString()}
+                </div>
+                <div style={{ fontSize: '13px', color: '#28a745' }}>
+                  +{stats.totalAds.change}% {stats.totalAds.period}
+                </div>
+              </div>
+              <div className="card" style={{ padding: '24px' }}>
+                <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Pending Payments</div>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '8px', color: '#333' }}>
+                  {stats.pendingPayments.value}
+                </div>
+                <div style={{ fontSize: '13px', color: '#28a745' }}>
+                  +{stats.pendingPayments.change}% {stats.pendingPayments.period}
+                </div>
+              </div>
+              <div className="card" style={{ padding: '24px' }}>
+                <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>Approved Ads</div>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '8px', color: '#333' }}>
+                  {stats.approvedAds.value.toLocaleString()}
+                </div>
+                <div style={{ fontSize: '13px', color: '#28a745' }}>
+                  +{stats.approvedAds.change}% {stats.approvedAds.period}
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Ad Submissions */}
+            <div className="card">
+              <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#333' }}>
+                Recent Ad Submissions
+              </h2>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#666', fontSize: '13px' }}>AD TITLE</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#666', fontSize: '13px' }}>SUBMITTER</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#666', fontSize: '13px' }}>CATEGORY</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#666', fontSize: '13px' }}>DATE SUBMITTED</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#666', fontSize: '13px' }}>STATUS</th>
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#666', fontSize: '13px' }}>ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentAds.map((ad) => (
+                      <tr key={ad.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: '12px', fontSize: '14px' }}>{ad.title}</td>
+                        <td style={{ padding: '12px', fontSize: '14px' }}>{ad.seller_name}</td>
+                        <td style={{ padding: '12px', fontSize: '14px' }}>{ad.category_name}</td>
+                        <td style={{ padding: '12px', fontSize: '14px', color: '#666' }}>
+                          {new Date(ad.created_at).toLocaleDateString()}
+                        </td>
+                        <td style={{ padding: '12px' }}>{getStatusBadge(ad.status)}</td>
+                        <td style={{ padding: '12px' }}>
+                          {ad.status === 'pending_admin_approval' ? (
+                            <button
+                              onClick={() => handleApproveAd(ad.id)}
+                              style={{
+                                color: '#0070f3',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                textDecoration: 'underline',
+                                marginRight: '10px'
+                              }}
+                            >
+                              Approve / Reject
+                            </button>
+                          ) : (
+                            <Link href={`/ads/${ad.id}`} style={{ color: '#0070f3', fontSize: '14px', textDecoration: 'underline' }}>
+                              View
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Payments Tab */}
+        {activeNav === 'payments' && (
+          <div>
+            <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '20px', color: '#333' }}>
+              Pending Payment Verifications
+            </h2>
             {loading ? (
               <p>Loading...</p>
             ) : pendingPayments.length === 0 ? (
@@ -243,19 +510,10 @@ export default function AdminDashboard() {
                 <p style={{ color: '#666', fontSize: '18px' }}>No pending payments</p>
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table
-                  style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    background: 'white',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-                  }}
-                >
+              <div className="card" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                    <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                       <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Ad Title</th>
                       <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>User</th>
                       <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Bank/Service</th>
@@ -266,12 +524,7 @@ export default function AdminDashboard() {
                   </thead>
                   <tbody>
                     {pendingPayments.map((payment, index) => (
-                      <tr
-                        key={payment.id}
-                        style={{
-                          borderBottom: index < pendingPayments.length - 1 ? '1px solid #dee2e6' : 'none',
-                        }}
-                      >
+                      <tr key={payment.id} style={{ borderBottom: index < pendingPayments.length - 1 ? '1px solid #e5e7eb' : 'none' }}>
                         <td style={{ padding: '15px' }}>
                           <strong>{payment.ad_title}</strong>
                           <br />
@@ -285,19 +538,10 @@ export default function AdminDashboard() {
                         <td style={{ padding: '15px' }}>
                           {payment.bank_name}
                           <br />
-                          <span style={{ color: '#666', fontSize: '14px' }}>
-                            Sender: {payment.sender_name}
-                          </span>
+                          <span style={{ color: '#666', fontSize: '14px' }}>Sender: {payment.sender_name}</span>
                         </td>
                         <td style={{ padding: '15px' }}>
-                          <code
-                            style={{
-                              background: '#f8f9fa',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              fontSize: '14px',
-                            }}
-                          >
+                          <code style={{ background: '#f8f9fa', padding: '4px 8px', borderRadius: '4px', fontSize: '14px' }}>
                             {payment.transaction_id}
                           </code>
                           {payment.screenshot_url && (
@@ -343,35 +587,29 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {activeTab === 'ads' && (
+        {/* Ads Tab */}
+        {activeNav === 'ads' && (
           <div>
-            <h2 style={{ marginBottom: '20px' }}>All Ads</h2>
+            <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '20px', color: '#333' }}>All Ads</h2>
             {ads.length === 0 ? (
               <p>No ads</p>
             ) : (
-              <div>
+              <div className="card">
                 {ads.map((ad) => (
-                  <div key={ad.id} className="card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <h3>{ad.title}</h3>
-                        <p style={{ color: '#666' }}>By {ad.seller_name}</p>
-                        <p style={{ color: '#999', fontSize: '14px' }}>
-                          {new Date(ad.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      {getStatusBadge(ad.status)}
+                  <div key={ad.id} style={{ padding: '15px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <h3 style={{ marginBottom: '5px' }}>{ad.title}</h3>
+                      <p style={{ color: '#666', fontSize: '14px' }}>By {ad.seller_name}</p>
+                      <p style={{ color: '#999', fontSize: '13px' }}>{new Date(ad.created_at).toLocaleDateString()}</p>
                     </div>
-                    {ad.status === 'pending_admin_approval' && (
-                      <div style={{ marginTop: '15px' }}>
-                        <button
-                          onClick={() => handleApproveAd(ad.id)}
-                          className="btn btn-success"
-                        >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      {getStatusBadge(ad.status)}
+                      {ad.status === 'pending_admin_approval' && (
+                        <button onClick={() => handleApproveAd(ad.id)} className="btn btn-success">
                           Approve Ad
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -379,25 +617,31 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {activeTab === 'users' && (
+        {/* Users Tab */}
+        {activeNav === 'users' && (
           <div>
-            <h2 style={{ marginBottom: '20px' }}>All Users</h2>
+            <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '20px', color: '#333' }}>All Users</h2>
             {users.length === 0 ? (
               <p>No users</p>
             ) : (
-              <div>
+              <div className="card">
                 {users.map((user) => (
-                  <div key={user.id} className="card">
-                    <h3>{user.name}</h3>
-                    <p>{user.email}</p>
-                    <p>Role: {user.role}</p>
-                    <p style={{ color: '#999', fontSize: '14px' }}>
-                      Joined: {new Date(user.created_at).toLocaleDateString()}
-                    </p>
+                  <div key={user.id} style={{ padding: '15px', borderBottom: '1px solid #e5e7eb' }}>
+                    <h3 style={{ marginBottom: '5px' }}>{user.name}</h3>
+                    <p style={{ color: '#666', fontSize: '14px' }}>{user.email}</p>
+                    <p style={{ color: '#999', fontSize: '13px' }}>Role: {user.role} | Joined: {new Date(user.created_at).toLocaleDateString()}</p>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Categories Tab */}
+        {activeNav === 'categories' && (
+          <div>
+            <h2 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '20px', color: '#333' }}>Categories</h2>
+            <p style={{ color: '#666' }}>Category management coming soon...</p>
           </div>
         )}
       </div>
@@ -460,6 +704,6 @@ export default function AdminDashboard() {
           onClose={() => setToast(null)}
         />
       )}
-    </>
+    </div>
   );
 }

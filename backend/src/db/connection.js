@@ -15,6 +15,11 @@ export const pool = new Pool({
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
-  process.exit(-1);
+  // Don't exit in serverless environment
+  if (process.env.VERCEL) {
+    console.error('Database connection error in Vercel:', err);
+  } else {
+    process.exit(-1);
+  }
 });
 

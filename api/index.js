@@ -21,13 +21,24 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Health check
+// Health check - improved error handling
 app.get('/api/health', async (req, res) => {
   try {
-    await pool.query('SELECT 1');
-    res.json({ status: 'ok', database: 'connected' });
+    // Test database connection
+    const result = await pool.query('SELECT 1 as test');
+    res.json({ 
+      status: 'ok', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
-    res.status(500).json({ status: 'error', database: 'disconnected', error: error.message });
+    console.error('Health check error:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      database: 'disconnected', 
+      error: error.message,
+      details: process.env.DB_HOST ? 'DB config exists' : 'DB config missing'
+    });
   }
 });
 

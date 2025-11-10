@@ -20,11 +20,21 @@ export default function LoginPage() {
 
     try {
       const response = await authApi.login(formData);
-      setToken(response.data.token);
-      setUser(response.data.user);
-      router.push('/');
+      if (response.data && response.data.token && response.data.user) {
+        setToken(response.data.token);
+        setUser(response.data.user);
+        // Redirect based on user role
+        if (response.data.user.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/');
+        }
+      } else {
+        setError('Invalid response from server');
+      }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed');
+      console.error('Login error:', err);
+      setError(err.response?.data?.error || err.message || 'Login failed');
     } finally {
       setLoading(false);
     }

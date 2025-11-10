@@ -46,13 +46,19 @@ export default function AdminDashboard() {
   const [toast, setToast] = useState<ToastState | null>(null);
 
   useEffect(() => {
-    const currentUser = getUser();
-    if (!currentUser || currentUser.role !== 'admin') {
+    try {
+      const currentUser = getUser();
+      if (!currentUser || currentUser.role !== 'admin') {
+        router.push('/');
+        return;
+      }
+      setUser(currentUser);
+      fetchPendingPayments();
+    } catch (error) {
+      console.error('Error in admin page:', error);
+      setToast({ message: 'Error loading admin page', type: 'error' });
       router.push('/');
-      return;
     }
-    setUser(currentUser);
-    fetchPendingPayments();
   }, []);
 
   useEffect(() => {
@@ -69,10 +75,15 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       const response = await adminApi.getPendingPayments();
-      setPendingPayments(response.data);
-    } catch (error) {
+      setPendingPayments(response.data || []);
+    } catch (error: any) {
       console.error('Failed to fetch pending payments:', error);
-      showToast('Failed to fetch pending payments', 'error');
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to fetch pending payments';
+      showToast(errorMsg, 'error');
+      // If unauthorized, redirect to login
+      if (error.response?.status === 401) {
+        router.push('/login');
+      }
     } finally {
       setLoading(false);
     }

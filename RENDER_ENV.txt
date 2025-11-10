@@ -1,0 +1,34 @@
+# ============================================
+# RENDER ENVIRONMENT VARIABLES (Backend)
+# ============================================
+# Copy these to Render Dashboard → Your Service → Environment → Environment Variables
+# Add each variable one by one
+
+# Server
+PORT=5000
+NODE_ENV=production
+
+# Database - Supabase
+DB_HOST=db.ayptygxyzrcvjdhnsdrt.supabase.co
+DB_PORT=5432
+DB_NAME=postgres
+DB_USER=postgres
+DB_PASSWORD=YOUR_DATABASE_PASSWORD_HERE
+
+# JWT
+JWT_SECRET=listingads_super_secret_jwt_key_2024_change_in_production_use_random_string
+JWT_EXPIRES_IN=7d
+
+# Admin Payment Instructions
+ADMIN_BANK_NAME=Your Bank Name
+ADMIN_ACCOUNT_NUMBER=1234567890
+ADMIN_ACCOUNT_TITLE=Your Account Title
+
+# ============================================
+# IMPORTANT NOTES:
+# ============================================
+# 1. Replace YOUR_DATABASE_PASSWORD_HERE with your actual Supabase database password
+# 2. Change JWT_SECRET to a strong random string (use: openssl rand -base64 32)
+# 3. Update ADMIN_BANK_NAME, ADMIN_ACCOUNT_NUMBER, ADMIN_ACCOUNT_TITLE with your actual bank details
+# 4. After deploying, update NEXT_PUBLIC_API_URL in Vercel with your Render backend URL
+

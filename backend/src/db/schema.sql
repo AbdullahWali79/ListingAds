@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS payments (
   bank_name VARCHAR(255) NOT NULL,
   transaction_id VARCHAR(255) NOT NULL,
   screenshot_url VARCHAR(500),
-  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected')),
   admin_note TEXT,
   verified_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

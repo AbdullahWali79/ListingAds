@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import { getUser } from '@/lib/auth';
 import { adminApi } from '@/lib/api';
+import Toast from '@/components/Toast';
+import ConfirmModal from '@/components/ConfirmModal';
 
 interface PendingPayment {
   id: number;
@@ -20,6 +22,11 @@ interface PendingPayment {
   created_at: string;
 }
 
+interface ToastState {
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -27,8 +34,16 @@ export default function AdminDashboard() {
   const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [ads, setAds] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Modal states
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PendingPayment | null>(null);
   const [rejectNote, setRejectNote] = useState('');
-  const [selectedPaymentId, setSelectedPaymentId] = useState<number | null>(null);
+  
+  // Toast state
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   useEffect(() => {
     const currentUser = getUser();
@@ -45,15 +60,21 @@ export default function AdminDashboard() {
       fetchAds();
     } else if (activeTab === 'users') {
       fetchUsers();
+    } else if (activeTab === 'payments') {
+      fetchPendingPayments();
     }
   }, [activeTab]);
 
   const fetchPendingPayments = async () => {
     try {
+      setLoading(true);
       const response = await adminApi.getPendingPayments();
       setPendingPayments(response.data);
     } catch (error) {
       console.error('Failed to fetch pending payments:', error);
+      showToast('Failed to fetch pending payments', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -63,6 +84,7 @@ export default function AdminDashboard() {
       setAds(response.data);
     } catch (error) {
       console.error('Failed to fetch ads:', error);
+      showToast('Failed to fetch ads', 'error');
     }
   };
 
@@ -71,50 +93,65 @@ export default function AdminDashboard() {
       const response = await adminApi.getAllUsers();
       setUsers(response.data);
     } catch (error) {
-      console.error('Failed to fetch users:', error);
+      console.error('Failed to fetch users', error);
+      showToast('Failed to fetch users', 'error');
     }
   };
 
-  const handleApprovePayment = async (paymentId: number) => {
-    if (!confirm('Approve this payment?')) return;
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+  };
+
+  const handleApproveClick = (payment: PendingPayment) => {
+    setSelectedPayment(payment);
+    setShowApproveModal(true);
+  };
+
+  const handleRejectClick = (payment: PendingPayment) => {
+    setSelectedPayment(payment);
+    setRejectNote('');
+    setShowRejectModal(true);
+  };
+
+  const handleApproveConfirm = async () => {
+    if (!selectedPayment) return;
 
     try {
-      await adminApi.approvePayment(paymentId);
-      alert('Payment approved successfully!');
+      await adminApi.approvePayment(selectedPayment.id);
+      showToast('Payment verified and ad approved successfully!', 'success');
+      setShowApproveModal(false);
+      setSelectedPayment(null);
       fetchPendingPayments();
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to approve payment');
+      showToast(error.response?.data?.error || 'Failed to approve payment', 'error');
     }
   };
 
-  const handleRejectPayment = async (paymentId: number) => {
-    if (!rejectNote.trim()) {
-      alert('Please provide a rejection reason');
+  const handleRejectConfirm = async () => {
+    if (!selectedPayment || !rejectNote.trim()) {
+      showToast('Please provide a rejection reason', 'error');
       return;
     }
 
-    if (!confirm('Reject this payment?')) return;
-
     try {
-      await adminApi.rejectPayment(paymentId, { admin_note: rejectNote });
-      alert('Payment rejected');
+      await adminApi.rejectPayment(selectedPayment.id, { admin_note: rejectNote });
+      showToast('Payment rejected successfully', 'success');
+      setShowRejectModal(false);
+      setSelectedPayment(null);
       setRejectNote('');
-      setSelectedPaymentId(null);
       fetchPendingPayments();
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to reject payment');
+      showToast(error.response?.data?.error || 'Failed to reject payment', 'error');
     }
   };
 
   const handleApproveAd = async (adId: number) => {
-    if (!confirm('Approve this ad?')) return;
-
     try {
       await adminApi.approveAd(adId);
-      alert('Ad approved successfully!');
+      showToast('Ad approved successfully!', 'success');
       fetchAds();
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to approve ad');
+      showToast(error.response?.data?.error || 'Failed to approve ad', 'error');
     }
   };
 
@@ -157,7 +194,7 @@ export default function AdminDashboard() {
               borderBottom: activeTab === 'payments' ? '3px solid #0070f3' : 'none',
             }}
           >
-            Pending Payments
+            Pending Payments ({pendingPayments.length})
           </button>
           <button
             onClick={() => setActiveTab('ads')}
@@ -187,73 +224,109 @@ export default function AdminDashboard() {
 
         {activeTab === 'payments' && (
           <div>
-            <h2 style={{ marginBottom: '20px' }}>Pending Payments ({pendingPayments.length})</h2>
-            {pendingPayments.length === 0 ? (
-              <p>No pending payments</p>
+            <h2 style={{ marginBottom: '20px' }}>Pending Payment Verifications</h2>
+            {loading ? (
+              <p>Loading...</p>
+            ) : pendingPayments.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
+                <p style={{ color: '#666', fontSize: '18px' }}>No pending payments</p>
+              </div>
             ) : (
-              <div>
-                {pendingPayments.map((payment) => (
-                  <div key={payment.id} className="card">
-                    <h3>{payment.ad_title}</h3>
-                    <p><strong>Package:</strong> {payment.package}</p>
-                    <p><strong>User:</strong> {payment.user_name} ({payment.user_email})</p>
-                    <p><strong>Sender Name:</strong> {payment.sender_name}</p>
-                    <p><strong>Bank/Service:</strong> {payment.bank_name}</p>
-                    <p><strong>Transaction ID:</strong> {payment.transaction_id}</p>
-                    {payment.screenshot_url && (
-                      <p>
-                        <strong>Screenshot:</strong>{' '}
-                        <a href={payment.screenshot_url} target="_blank" rel="noopener noreferrer">
-                          View
-                        </a>
-                      </p>
-                    )}
-                    <p style={{ color: '#999', fontSize: '14px' }}>
-                      Submitted: {new Date(payment.created_at).toLocaleString()}
-                    </p>
-                    <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
-                      <button
-                        onClick={() => handleApprovePayment(payment.id)}
-                        className="btn btn-success"
+              <div style={{ overflowX: 'auto' }}>
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    background: 'white',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+                  }}
+                >
+                  <thead>
+                    <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                      <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Ad Title</th>
+                      <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>User</th>
+                      <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Bank/Service</th>
+                      <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Transaction ID</th>
+                      <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Submitted</th>
+                      <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingPayments.map((payment, index) => (
+                      <tr
+                        key={payment.id}
+                        style={{
+                          borderBottom: index < pendingPayments.length - 1 ? '1px solid #dee2e6' : 'none',
+                        }}
                       >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => setSelectedPaymentId(payment.id)}
-                        className="btn btn-danger"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                    {selectedPaymentId === payment.id && (
-                      <div style={{ marginTop: '15px' }}>
-                        <textarea
-                          placeholder="Rejection reason (required)"
-                          value={rejectNote}
-                          onChange={(e) => setRejectNote(e.target.value)}
-                          style={{ width: '100%', minHeight: '80px', marginBottom: '10px' }}
-                        />
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <button
-                            onClick={() => handleRejectPayment(payment.id)}
-                            className="btn btn-danger"
-                          >
-                            Confirm Reject
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedPaymentId(null);
-                              setRejectNote('');
+                        <td style={{ padding: '15px' }}>
+                          <strong>{payment.ad_title}</strong>
+                          <br />
+                          <span style={{ color: '#666', fontSize: '14px' }}>Package: {payment.package}</span>
+                        </td>
+                        <td style={{ padding: '15px' }}>
+                          {payment.user_name}
+                          <br />
+                          <span style={{ color: '#666', fontSize: '14px' }}>{payment.user_email}</span>
+                        </td>
+                        <td style={{ padding: '15px' }}>
+                          {payment.bank_name}
+                          <br />
+                          <span style={{ color: '#666', fontSize: '14px' }}>
+                            Sender: {payment.sender_name}
+                          </span>
+                        </td>
+                        <td style={{ padding: '15px' }}>
+                          <code
+                            style={{
+                              background: '#f8f9fa',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '14px',
                             }}
-                            className="btn btn-secondary"
                           >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                            {payment.transaction_id}
+                          </code>
+                          {payment.screenshot_url && (
+                            <div style={{ marginTop: '8px' }}>
+                              <a
+                                href={payment.screenshot_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: '#0070f3', fontSize: '14px' }}
+                              >
+                                View Screenshot →
+                              </a>
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '15px', color: '#666', fontSize: '14px' }}>
+                          {new Date(payment.created_at).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '15px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                            <button
+                              onClick={() => handleApproveClick(payment)}
+                              className="btn btn-success"
+                              style={{ padding: '8px 16px', fontSize: '14px' }}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleRejectClick(payment)}
+                              className="btn btn-danger"
+                              style={{ padding: '8px 16px', fontSize: '14px' }}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -317,7 +390,65 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* Confirmation Modals */}
+      <ConfirmModal
+        isOpen={showApproveModal}
+        title="Approve Payment"
+        message={`Are you sure you want to verify this payment and approve the ad "${selectedPayment?.ad_title}"?`}
+        confirmText="Approve"
+        cancelText="Cancel"
+        type="success"
+        onConfirm={handleApproveConfirm}
+        onCancel={() => {
+          setShowApproveModal(false);
+          setSelectedPayment(null);
+        }}
+      />
+
+      <ConfirmModal
+        isOpen={showRejectModal}
+        title="Reject Payment"
+        message="Please provide a reason for rejecting this payment:"
+        confirmText="Reject"
+        cancelText="Cancel"
+        type="danger"
+        onConfirm={handleRejectConfirm}
+        onCancel={() => {
+          setShowRejectModal(false);
+          setSelectedPayment(null);
+          setRejectNote('');
+        }}
+      >
+        {showRejectModal && (
+          <div style={{ marginTop: '15px' }}>
+            <textarea
+              placeholder="Rejection reason (required)"
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+              style={{
+                width: '100%',
+                minHeight: '100px',
+                padding: '10px',
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+              }}
+              required
+            />
+          </div>
+        )}
+      </ConfirmModal>
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </>
   );
 }
-

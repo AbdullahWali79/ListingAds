@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? '/api' : 'http://localhost:5000/api');
 
 const api = axios.create({
   baseURL: API_URL,
@@ -9,13 +9,16 @@ const api = axios.create({
   },
 });
 
-// Add token to requests if available
-if (typeof window !== 'undefined') {
-  const token = localStorage.getItem('token');
-  if (token) {
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+// Add token to requests dynamically
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
-}
+  return config;
+});
 
 // Auth
 export const authApi = {
@@ -59,7 +62,7 @@ export const paymentApi = {
     bank_name: string;
     transaction_id: string;
     screenshot_url?: string;
-  }) => api.post('/payments/submit', data),
+  }) => api.post('/payments', data), // POST to /api/payments
   getMyPayments: () => api.get('/payments/my-payments'),
   getByAdId: (adId: number) => api.get(`/payments/ad/${adId}`),
 };

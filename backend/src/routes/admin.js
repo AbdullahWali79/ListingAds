@@ -49,15 +49,15 @@ router.post('/payments/:id/approve', async (req, res) => {
       return res.status(400).json({ error: 'Payment is not pending' });
     }
 
-    // Update payment status
+    // Update payment status to 'verified'
     await pool.query(
       `UPDATE payments 
-       SET status = 'approved', verified_at = CURRENT_TIMESTAMP, admin_note = $1
+       SET status = 'verified', verified_at = CURRENT_TIMESTAMP, admin_note = $1
        WHERE id = $2`,
       [admin_note || null, req.params.id]
     );
 
-    // Update ad status to approved
+    // Update ad status to 'approved'
     await pool.query("UPDATE ads SET status = 'approved' WHERE id = $1", [payment.ad_id]);
 
     await createAuditLog('payment_approved', req.user.id, req.params.id, 'payment', {

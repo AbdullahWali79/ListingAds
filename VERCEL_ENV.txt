@@ -1,0 +1,10 @@
+# ============================================
+# VERCEL ENVIRONMENT VARIABLES (Frontend)
+# ============================================
+# Copy these to Vercel Dashboard → Your Project → Settings → Environment Variables
+# Add each variable one by one, or use Vercel CLI
+
+NEXT_PUBLIC_API_URL=https://your-backend-url.onrender.com/api
+
+# Note: Replace 'your-backend-url.onrender.com' with your actual backend URL after deploying to Render
+

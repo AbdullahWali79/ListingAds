@@ -14,7 +14,64 @@ router.get('/instructions', (req, res) => {
   });
 });
 
-// Submit payment
+// Submit payment (POST /api/payments)
+router.post('/', authenticate, async (req, res) => {
+  try {
+    const { ad_id, sender_name, bank_name, transaction_id, screenshot_url } = req.body;
+
+    // Validate required fields
+    if (!ad_id || !sender_name || !bank_name || !transaction_id) {
+      return res.status(400).json({
+        error: 'Ad ID, sender name, bank name, and transaction ID are required',
+      });
+    }
+
+    // Verify ad belongs to user and is pending verification
+    const adCheck = await pool.query('SELECT * FROM ads WHERE id = $1 AND user_id = $2', [
+      ad_id,
+      req.user.id,
+    ]);
+
+    if (adCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Ad not found or not owned by you' });
+    }
+
+    if (adCheck.rows[0].status !== 'pending_verification') {
+      return res.status(400).json({
+        error: 'Ad is not in pending verification status',
+      });
+    }
+
+    // Check if payment already exists
+    const existingPayment = await pool.query(
+      'SELECT id FROM payments WHERE ad_id = $1 AND status = $2',
+      [ad_id, 'pending']
+    );
+
+    if (existingPayment.rows.length > 0) {
+      return res.status(400).json({ error: 'Payment already submitted for this ad' });
+    }
+
+    // Create payment record with status='pending' (default)
+    const result = await pool.query(
+      `INSERT INTO payments (ad_id, user_id, sender_name, bank_name, transaction_id, screenshot_url, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+       RETURNING *`,
+      [ad_id, req.user.id, sender_name, bank_name, transaction_id, screenshot_url || null]
+    );
+
+    await createAuditLog('payment_submitted', req.user.id, result.rows[0].id, 'payment', {
+      ad_id,
+    });
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to submit payment' });
+  }
+});
+
+// Submit payment (POST /api/payments/submit) - kept for backward compatibility
 router.post('/submit', authenticate, async (req, res) => {
   try {
     const { ad_id, sender_name, bank_name, transaction_id, screenshot_url } = req.body;
@@ -53,8 +110,8 @@ router.post('/submit', authenticate, async (req, res) => {
 
     // Create payment record
     const result = await pool.query(
-      `INSERT INTO payments (ad_id, user_id, sender_name, bank_name, transaction_id, screenshot_url)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO payments (ad_id, user_id, sender_name, bank_name, transaction_id, screenshot_url, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING *`,
       [ad_id, req.user.id, sender_name, bank_name, transaction_id, screenshot_url || null]
     );

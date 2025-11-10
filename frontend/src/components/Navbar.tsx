@@ -2,18 +2,23 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { getUser, logout } from '@/lib/auth';
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
+    // Check user on mount and when route changes
     setUser(getUser());
-  }, []);
+  }, [pathname]);
 
   const handleLogout = () => {
     logout();
     setUser(null);
+    // Redirect to home after logout
+    window.location.href = '/';
   };
 
   return (

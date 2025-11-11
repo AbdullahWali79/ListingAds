@@ -155,3 +155,17 @@ a {
   color: #0c5460;
 }
 
+/* Responsive grid for hero section */
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

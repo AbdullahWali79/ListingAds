@@ -96,13 +96,7 @@ export default function Home() {
         color: 'white'
       }}>
         <div className="container">
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr 1fr', 
-            gap: '60px', 
-            alignItems: 'center',
-            '@media (max-width: 768px)': { gridTemplateColumns: '1fr' }
-          }}>
+          <div className="hero-grid">
             <div>
               <h1 style={{ fontSize: '48px', fontWeight: 'bold', marginBottom: '20px', lineHeight: '1.2' }}>
                 Buy & Sell Products Easily

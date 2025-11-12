@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getUser, logout } from '@/lib/auth';
-import { adminApi } from '@/lib/api';
+import { getUser, logout, getToken } from '@/lib/auth';
+import { adminApi, authApi } from '@/lib/api';
 import Toast from '@/components/Toast';
 import ConfirmModal from '@/components/ConfirmModal';
 
@@ -64,22 +64,61 @@ export default function AdminDashboard() {
   const [toast, setToast] = useState<ToastState | null>(null);
 
   useEffect(() => {
-    try {
-      const currentUser = getUser();
-      if (!currentUser || currentUser.role !== 'admin') {
-        router.push('/');
-        return;
+    const checkAdminAccess = async () => {
+      try {
+        // Check if user is logged in
+        const token = getToken();
+        if (!token) {
+          setToast({ message: 'Please login to access admin panel', type: 'error' });
+          router.push('/login');
+          return;
+        }
+
+        // Check local user data
+        const currentUser = getUser();
+        if (!currentUser) {
+          setToast({ message: 'Please login to access admin panel', type: 'error' });
+          router.push('/login');
+          return;
+        }
+
+        // Verify with server that user is admin
+        try {
+          const response = await authApi.getMe();
+          const serverUser = response.data;
+          
+          if (!serverUser || serverUser.role !== 'admin') {
+            setToast({ message: 'Access denied. Admin privileges required.', type: 'error' });
+            router.push('/');
+            return;
+          }
+
+          // User is verified admin
+          setUser(serverUser);
+          setLoading(false);
+          fetchStats();
+          fetchRecentAds();
+          fetchPendingPayments();
+        } catch (apiError: any) {
+          // If API call fails, user might not be authenticated
+          if (apiError.response?.status === 401 || apiError.response?.status === 403) {
+            setToast({ message: 'Session expired. Please login again.', type: 'error' });
+            logout();
+            router.push('/login');
+          } else {
+            setToast({ message: 'Error verifying admin access', type: 'error' });
+            router.push('/');
+          }
+        }
+      } catch (error) {
+        console.error('Error in admin page:', error);
+        setToast({ message: 'Error loading admin page', type: 'error' });
+        router.push('/login');
       }
-      setUser(currentUser);
-      fetchStats();
-      fetchRecentAds();
-      fetchPendingPayments();
-    } catch (error) {
-      console.error('Error in admin page:', error);
-      setToast({ message: 'Error loading admin page', type: 'error' });
-      router.push('/');
-    }
-  }, []);
+    };
+
+    checkAdminAccess();
+  }, [router]);
 
   useEffect(() => {
     if (activeNav === 'ads') {
@@ -240,6 +279,42 @@ export default function AdminDashboard() {
     logout();
     router.push('/');
   };
+
+  // Show loading screen while checking authentication
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '100vh',
+        background: '#f0f4f8',
+        flexDirection: 'column',
+        gap: '20px'
+      }}>
+        <div style={{
+          width: '50px',
+          height: '50px',
+          border: '4px solid #e5e7eb',
+          borderTop: '4px solid #0070f3',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }}></div>
+        <p style={{ color: '#666', fontSize: '16px' }}>Verifying admin access...</p>
+        <style jsx>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // If no user, don't render (will redirect)
+  if (!user) {
+    return null;
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f0f4f8' }}>

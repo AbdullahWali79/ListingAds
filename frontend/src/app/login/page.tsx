@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [showPasswordSignup, setShowPasswordSignup] = useState(false);
   
   // Login form
-  const [loginData, setLoginData] = useState({ email: '', password: '', loginAs: 'buyer' as 'buyer' | 'seller' });
+  const [loginData, setLoginData] = useState({ email: '', password: '', loginAs: 'buyer' as 'buyer' | 'seller' | 'admin' });
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   
@@ -191,17 +191,18 @@ export default function LoginPage() {
                   </div>
                   <div className="form-group">
                     <label>Login as</label>
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         onClick={() => setLoginData({ ...loginData, loginAs: 'buyer' })}
                         style={{
                           flex: 1,
+                          minWidth: '100px',
                           padding: '12px',
                           border: '1px solid #ddd',
                           borderRadius: '8px',
-                          background: loginData.loginAs === 'buyer' ? 'white' : '#f9fafb',
-                          color: loginData.loginAs === 'buyer' ? '#333' : '#666',
+                          background: loginData.loginAs === 'buyer' ? '#0070f3' : '#f9fafb',
+                          color: loginData.loginAs === 'buyer' ? 'white' : '#666',
                           cursor: 'pointer',
                           fontWeight: loginData.loginAs === 'buyer' ? '600' : '400',
                           transition: 'all 0.2s'
@@ -214,17 +215,36 @@ export default function LoginPage() {
                         onClick={() => setLoginData({ ...loginData, loginAs: 'seller' })}
                         style={{
                           flex: 1,
+                          minWidth: '100px',
                           padding: '12px',
                           border: '1px solid #ddd',
                           borderRadius: '8px',
-                          background: loginData.loginAs === 'seller' ? 'white' : '#f9fafb',
-                          color: loginData.loginAs === 'seller' ? '#333' : '#666',
+                          background: loginData.loginAs === 'seller' ? '#0070f3' : '#f9fafb',
+                          color: loginData.loginAs === 'seller' ? 'white' : '#666',
                           cursor: 'pointer',
                           fontWeight: loginData.loginAs === 'seller' ? '600' : '400',
                           transition: 'all 0.2s'
                         }}
                       >
                         Seller
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLoginData({ ...loginData, loginAs: 'admin' })}
+                        style={{
+                          flex: 1,
+                          minWidth: '100px',
+                          padding: '12px',
+                          border: '1px solid #ddd',
+                          borderRadius: '8px',
+                          background: loginData.loginAs === 'admin' ? '#dc3545' : '#f9fafb',
+                          color: loginData.loginAs === 'admin' ? 'white' : '#666',
+                          cursor: 'pointer',
+                          fontWeight: loginData.loginAs === 'admin' ? '600' : '400',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        Admin
                       </button>
                     </div>
                   </div>

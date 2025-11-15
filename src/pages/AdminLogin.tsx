@@ -4,6 +4,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../firebase'
 
 const AdminLogin = () => {
+  console.log('✅ AdminLogin component rendering')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -17,6 +18,7 @@ const AdminLogin = () => {
 
     try {
       await signInWithEmailAndPassword(auth, email, password)
+      // Navigate to dashboard - ProtectedRoute will check user role
       navigate('/admin/dashboard')
     } catch (err: any) {
       setError(err.message || 'Failed to login. Please check your credentials.')
@@ -33,6 +35,10 @@ const AdminLogin = () => {
         alignItems: 'center',
         minHeight: '100vh',
         backgroundColor: '#f5f5f5',
+        width: '100%',
+        position: 'relative',
+        padding: '20px',
+        boxSizing: 'border-box',
       }}
     >
       <div
@@ -45,7 +51,7 @@ const AdminLogin = () => {
           maxWidth: '400px',
         }}
       >
-        <h1 style={{ marginBottom: '1.5rem', textAlign: 'center', color: '#333' }}>
+        <h1 style={{ marginBottom: '1.5rem', textAlign: 'center', color: '#333', fontSize: '24px' }}>
           Admin Login
         </h1>
         

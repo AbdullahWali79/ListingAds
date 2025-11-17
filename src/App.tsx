@@ -1,4 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import PublicLayout from './public/PublicLayout'
+import Home from './public/Home'
+import CategoryAds from './public/CategoryAds'
+import AdDetails from './public/AdDetails'
 import AdminLogin from './pages/AdminLogin'
 import AdminLayout from './pages/AdminLayout'
 import Dashboard from './pages/Dashboard'
@@ -7,7 +11,13 @@ import Ads from './pages/Ads'
 import Payments from './pages/Payments'
 import Users from './pages/Users'
 import Blogs from './pages/Blogs'
+import PublicLogin from './public/auth/PublicLogin'
+import PublicRegister from './public/auth/PublicRegister'
+import UserDashboard from './public/UserDashboard'
+import PostAd from './public/PostAd'
 import ProtectedRoute from './routes/ProtectedRoute'
+import UserProtectedRoute from './routes/UserProtectedRoute'
+import SellerProtectedRoute from './routes/SellerProtectedRoute'
 
 function App() {
   console.log('✅ App component rendering')
@@ -24,9 +34,36 @@ function App() {
         zIndex: -1
       }} />
       <Routes>
+        {/* Public site */}
+        <Route path="/" element={<PublicLayout />}>
+          <Route index element={<Home />} />
+          <Route path="category/:slug" element={<CategoryAds />} />
+          <Route path="ad/:adId" element={<AdDetails />} />
+          {/* Public auth + user dashboard */}
+          <Route path="auth/login" element={<PublicLogin />} />
+          <Route path="auth/register" element={<PublicRegister />} />
+          <Route
+            path="dashboard"
+            element={
+              <UserProtectedRoute>
+                <UserDashboard />
+              </UserProtectedRoute>
+            }
+          />
+          <Route
+            path="post-ad"
+            element={
+              <SellerProtectedRoute>
+                <PostAd />
+              </SellerProtectedRoute>
+            }
+          />
+        </Route>
+
+        {/* Admin auth + panel */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
-          path="/admin"
+          path="/admin/*"
           element={
             <ProtectedRoute>
               <AdminLayout />
@@ -41,7 +78,9 @@ function App() {
           <Route path="blogs" element={<Blogs />} />
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
         </Route>
-        <Route path="/" element={<Navigate to="/admin/login" replace />} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
   )

@@ -26,6 +26,7 @@ interface Ad {
   status: 'pending' | 'approved' | 'rejected'
   rejectionReason?: string | null
   isDeleted: boolean
+  imageUrl?: string
   createdAt?: Timestamp
   updatedAt?: Timestamp
 }
@@ -92,6 +93,7 @@ const Ads = () => {
               status: data.status || 'pending',
               rejectionReason: data.rejectionReason || null,
               isDeleted: data.isDeleted || false,
+              imageUrl: data.imageUrl || data.image || undefined,
               createdAt: data.createdAt,
               updatedAt: data.updatedAt,
             } as Ad)
@@ -213,6 +215,7 @@ const Ads = () => {
         sellerEmail: 'john.smith@example.com',
         status: 'pending' as const,
         isDeleted: false,
+        imageUrl: 'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?w=400',
       },
       {
         title: '2020 Honda Civic - Excellent Condition',
@@ -225,6 +228,7 @@ const Ads = () => {
         sellerEmail: 'sarah.j@example.com',
         status: 'approved' as const,
         isDeleted: false,
+        imageUrl: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400',
       },
       {
         title: '3 Bedroom Apartment for Rent',
@@ -237,6 +241,7 @@ const Ads = () => {
         sellerEmail: 'm.brown@example.com',
         status: 'pending' as const,
         isDeleted: false,
+        imageUrl: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400',
       },
       {
         title: 'MacBook Pro M2 - 14 inch',
@@ -250,6 +255,7 @@ const Ads = () => {
         status: 'rejected' as const,
         rejectionReason: 'Incomplete information provided',
         isDeleted: false,
+        imageUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400',
       },
       {
         title: 'Vintage Leather Sofa Set',
@@ -262,6 +268,7 @@ const Ads = () => {
         sellerEmail: 'r.wilson@example.com',
         status: 'approved' as const,
         isDeleted: false,
+        imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400',
       },
     ]
 
@@ -531,6 +538,16 @@ const Ads = () => {
                       fontWeight: '600',
                     }}
                   >
+                    Image
+                  </th>
+                  <th
+                    style={{
+                      padding: '0.75rem',
+                      textAlign: 'left',
+                      color: '#333',
+                      fontWeight: '600',
+                    }}
+                  >
                     Title
                   </th>
                   <th
@@ -603,6 +620,41 @@ const Ads = () => {
                       borderBottom: '1px solid #f0f0f0',
                     }}
                   >
+                    <td style={{ padding: '0.75rem' }}>
+                      {ad.imageUrl ? (
+                        <img
+                          src={ad.imageUrl}
+                          alt={ad.title}
+                          style={{
+                            width: '60px',
+                            height: '60px',
+                            objectFit: 'cover',
+                            borderRadius: '4px',
+                            border: '1px solid #e0e0e0',
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                            const placeholder = e.currentTarget.nextElementSibling as HTMLElement
+                            if (placeholder) placeholder.style.display = 'flex'
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        style={{
+                          width: '60px',
+                          height: '60px',
+                          backgroundColor: '#e9ecef',
+                          borderRadius: '4px',
+                          display: ad.imageUrl ? 'none' : 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.75rem',
+                          color: '#999',
+                        }}
+                      >
+                        No Img
+                      </div>
+                    </td>
                     <td style={{ padding: '0.75rem', color: '#333' }}>
                       <div style={{ fontWeight: '500' }}>{ad.title}</div>
                       {ad.description && (
@@ -620,6 +672,35 @@ const Ads = () => {
                           {ad.description}
                         </div>
                       )}
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <input
+                          type="text"
+                          value={ad.imageUrl || ''}
+                          placeholder="Add Image URL"
+                          onChange={async (e) => {
+                            const newUrl = e.target.value.trim()
+                            if (newUrl !== (ad.imageUrl || '')) {
+                              try {
+                                await updateDoc(doc(db, 'ads', ad.id), {
+                                  imageUrl: newUrl || null,
+                                  updatedAt: serverTimestamp(),
+                                })
+                              } catch (err: any) {
+                                console.error('Error updating image URL:', err)
+                                setError(err.message || 'Failed to update image URL')
+                              }
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            maxWidth: '300px',
+                            padding: '0.25rem 0.5rem',
+                            fontSize: '0.75rem',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                          }}
+                        />
+                      </div>
                     </td>
                     <td style={{ padding: '0.75rem', color: '#666' }}>
                       {ad.categoryName}

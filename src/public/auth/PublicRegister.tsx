@@ -291,16 +291,23 @@ const PublicRegister = () => {
       // Sellers need admin approval, buyers are auto-approved
       const initialStatus: 'pending' | 'approved' = role === 'seller' ? 'pending' : 'approved';
       
-      await setDoc(doc(db, 'users', user.uid), {
+      // Prepare user data - only include profileImageUrl if it has a value
+      const userData: any = {
         name: name.trim(),
         email,
         phoneNumber: formattedPhone,
         role: role,
         status: initialStatus,
-        profileImageUrl: profileImageUrl.trim() || undefined,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      })
+      }
+
+      // Only add profileImageUrl if it has a value (not empty or undefined)
+      if (profileImageUrl && profileImageUrl.trim()) {
+        userData.profileImageUrl = profileImageUrl.trim()
+      }
+      
+      await setDoc(doc(db, 'users', user.uid), userData)
 
       // Navigate to dashboard
       navigate('/dashboard')

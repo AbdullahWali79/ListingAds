@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { createUserWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
@@ -17,21 +17,44 @@ const PublicRegister = () => {
   const [role, setRole] = useState<'user' | 'seller'>('user')
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [otpLoading, setOtpLoading] = useState(false)
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null)
+  const previousPhoneRef = useRef<string>('')
   const navigate = useNavigate()
+
+  // Initialize reCAPTCHA on component mount
+  useEffect(() => {
+    // Clean up on unmount
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear()
+        recaptchaVerifierRef.current = null
+      }
+    }
+  }, [])
 
   // Send OTP
   const handleSendOtp = async () => {
     setError('')
+    setSuccessMessage('')
     
     if (!phoneNumber.trim()) {
       setError('Phone number is required')
       return
     }
 
+    // Validate phone number format
+    const phoneRegex = /^[0-9]{10,11}$/
+    const cleanPhone = phoneNumber.trim().replace(/[\s-]/g, '')
+    if (!phoneRegex.test(cleanPhone)) {
+      setError('Please enter a valid 10-11 digit phone number')
+      return
+    }
+
     // Format phone number (add +92 for Pakistan if not present)
-    let formattedPhone = phoneNumber.trim()
+    let formattedPhone = cleanPhone
     if (!formattedPhone.startsWith('+')) {
       if (formattedPhone.startsWith('0')) {
         formattedPhone = '+92' + formattedPhone.substring(1)
@@ -44,24 +67,51 @@ const PublicRegister = () => {
 
     setOtpLoading(true)
     try {
+      // Clear existing reCAPTCHA if any
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear()
+      }
+
       // Setup reCAPTCHA
       const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
         callback: () => {
-          // reCAPTCHA solved
+          console.log('reCAPTCHA solved')
+        },
+        'expired-callback': () => {
+          console.log('reCAPTCHA expired')
+          setError('reCAPTCHA expired. Please try again.')
         },
       })
+
+      recaptchaVerifierRef.current = recaptchaVerifier
+
+      // Wait a bit for reCAPTCHA to initialize
+      await new Promise(resolve => setTimeout(resolve, 500))
 
       const result = await signInWithPhoneNumber(auth, formattedPhone, recaptchaVerifier)
       setConfirmationResult(result)
       setOtpSent(true)
+      setOtpVerified(false)
+      setOtp('')
       setError('')
+      setSuccessMessage('OTP sent successfully! Please check your phone.')
+      previousPhoneRef.current = phoneNumber
     } catch (err: any) {
       console.error('OTP Error:', err)
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear()
+        recaptchaVerifierRef.current = null
+      }
+      
       if (err.code === 'auth/too-many-requests') {
         setError('Too many requests. Please try again later.')
+      } else if (err.code === 'auth/invalid-phone-number') {
+        setError('Invalid phone number. Please check and try again.')
+      } else if (err.code === 'auth/quota-exceeded') {
+        setError('SMS quota exceeded. Please try again later.')
       } else {
-        setError(err.message || 'Failed to send OTP. Please try again.')
+        setError(err.message || 'Failed to send OTP. Please check your phone number and try again.')
       }
     } finally {
       setOtpLoading(false)
@@ -71,6 +121,7 @@ const PublicRegister = () => {
   // Verify OTP
   const handleVerifyOtp = async () => {
     setError('')
+    setSuccessMessage('')
     
     if (!otp.trim() || otp.length !== 6) {
       setError('Please enter a valid 6-digit OTP')
@@ -79,6 +130,7 @@ const PublicRegister = () => {
 
     if (!confirmationResult) {
       setError('OTP session expired. Please request a new OTP.')
+      setOtpSent(false)
       return
     }
 
@@ -88,14 +140,22 @@ const PublicRegister = () => {
       await confirmationResult.confirm(otp)
       setOtpVerified(true)
       setError('')
+      setSuccessMessage('Phone number verified successfully!')
+      
+      // Clean up reCAPTCHA
+      if (recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current.clear()
+        recaptchaVerifierRef.current = null
+      }
     } catch (err: any) {
       console.error('OTP Verification Error:', err)
       if (err.code === 'auth/invalid-verification-code') {
-        setError('Invalid OTP. Please check and try again.')
+        setError('Invalid OTP. Please check the code and try again.')
       } else if (err.code === 'auth/code-expired') {
         setError('OTP expired. Please request a new one.')
         setOtpSent(false)
         setConfirmationResult(null)
+        setOtp('')
       } else {
         setError(err.message || 'Invalid OTP. Please try again.')
       }
@@ -107,6 +167,7 @@ const PublicRegister = () => {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
+    setSuccessMessage('')
 
     // Validation
     if (!name.trim()) {
@@ -344,7 +405,23 @@ const PublicRegister = () => {
                 id="phoneNumber"
                 type="tel"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(e) => {
+                  const newPhone = e.target.value
+                  setPhoneNumber(newPhone)
+                  // Reset OTP state if phone number changes after OTP was sent
+                  if (otpSent && newPhone !== previousPhoneRef.current) {
+                    setOtpSent(false)
+                    setOtpVerified(false)
+                    setOtp('')
+                    setConfirmationResult(null)
+                    setSuccessMessage('')
+                    if (recaptchaVerifierRef.current) {
+                      recaptchaVerifierRef.current.clear()
+                      recaptchaVerifierRef.current = null
+                    }
+                  }
+                  previousPhoneRef.current = newPhone
+                }}
                 required
                 disabled={otpVerified}
                 style={{
@@ -380,9 +457,28 @@ const PublicRegister = () => {
               )}
             </div>
             {otpSent && !otpVerified && (
-              <div style={{ marginTop: '0.75rem' }}>
+              <div style={{ 
+                marginTop: '1rem', 
+                padding: '1rem', 
+                backgroundColor: '#f0f8ff', 
+                borderRadius: '8px',
+                border: '2px solid #007bff',
+              }}>
+                <label
+                  htmlFor="otp"
+                  style={{
+                    display: 'block',
+                    marginBottom: '0.5rem',
+                    color: '#007bff',
+                    fontWeight: '600',
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  Enter OTP Code *
+                </label>
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <input
+                    id="otp"
                     type="text"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -391,40 +487,70 @@ const PublicRegister = () => {
                     style={{
                       flex: 1,
                       padding: '0.75rem',
-                      border: '1px solid #ddd',
+                      border: '2px solid #007bff',
                       borderRadius: '4px',
-                      fontSize: '1rem',
+                      fontSize: '1.125rem',
+                      fontWeight: '600',
+                      textAlign: 'center',
+                      letterSpacing: '0.5rem',
                       boxSizing: 'border-box',
                     }}
+                    autoFocus
                   />
                   <button
                     type="button"
                     onClick={handleVerifyOtp}
                     disabled={otpLoading || otp.length !== 6}
                     style={{
-                      padding: '0.75rem 1rem',
+                      padding: '0.75rem 1.5rem',
                       backgroundColor: otpLoading || otp.length !== 6 ? '#ccc' : '#28a745',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
                       fontSize: '0.875rem',
-                      fontWeight: '500',
+                      fontWeight: '600',
                       cursor: otpLoading || otp.length !== 6 ? 'not-allowed' : 'pointer',
                       whiteSpace: 'nowrap',
+                      transition: 'background-color 0.2s',
                     }}
                   >
-                    {otpLoading ? 'Verifying...' : 'Verify'}
+                    {otpLoading ? 'Verifying...' : 'Verify OTP'}
                   </button>
                 </div>
-                <p style={{ fontSize: '0.75rem', color: '#666', margin: 0 }}>
-                  Enter the 6-digit code sent to your phone
+                <p style={{ fontSize: '0.75rem', color: '#666', margin: '0.5rem 0 0 0' }}>
+                  📱 Enter the 6-digit code sent to {phoneNumber}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpSent(false)
+                    setOtp('')
+                    setConfirmationResult(null)
+                    setError('')
+                    if (recaptchaVerifierRef.current) {
+                      recaptchaVerifierRef.current.clear()
+                      recaptchaVerifierRef.current = null
+                    }
+                  }}
+                  style={{
+                    marginTop: '0.75rem',
+                    padding: '0.5rem 1rem',
+                    backgroundColor: 'transparent',
+                    color: '#007bff',
+                    border: '1px solid #007bff',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Resend OTP
+                </button>
               </div>
             )}
             {otpVerified && (
               <div style={{ 
-                marginTop: '0.5rem', 
-                padding: '0.5rem', 
+                marginTop: '0.75rem', 
+                padding: '0.75rem', 
                 backgroundColor: '#d4edda', 
                 color: '#155724',
                 borderRadius: '4px',
@@ -432,12 +558,14 @@ const PublicRegister = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
+                border: '1px solid #c3e6cb',
+                fontWeight: '500',
               }}>
-                <span>✅</span>
-                <span>Phone number verified</span>
+                <span style={{ fontSize: '1.125rem' }}>✅</span>
+                <span>Phone number verified successfully!</span>
               </div>
             )}
-            <div id="recaptcha-container"></div>
+            <div id="recaptcha-container" style={{ display: 'none' }}></div>
             <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.5rem', marginBottom: 0 }}>
               Phone number is required to contact sellers. We'll send you an OTP for verification.
             </p>
@@ -647,9 +775,26 @@ const PublicRegister = () => {
                 color: '#c33',
                 borderRadius: '4px',
                 fontSize: '0.875rem',
+                border: '1px solid #fcc',
               }}
             >
-              {error}
+              ❌ {error}
+            </div>
+          )}
+
+          {successMessage && (
+            <div
+              style={{
+                marginBottom: '1rem',
+                padding: '0.75rem',
+                backgroundColor: '#d4edda',
+                color: '#155724',
+                borderRadius: '4px',
+                fontSize: '0.875rem',
+                border: '1px solid #c3e6cb',
+              }}
+            >
+              ✅ {successMessage}
             </div>
           )}
 

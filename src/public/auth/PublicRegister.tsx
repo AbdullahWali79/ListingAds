@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { createUserWithEmailAndPassword, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'

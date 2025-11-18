@@ -86,26 +86,64 @@ const PublicRegister = () => {
         recaptchaVerifierRef.current = null
       }
 
-      // Clear the container element
+      // Clear the container element completely
       const recaptchaContainer = document.getElementById('recaptcha-container')
       if (recaptchaContainer) {
+        // Remove all child elements
+        while (recaptchaContainer.firstChild) {
+          recaptchaContainer.removeChild(recaptchaContainer.firstChild)
+        }
+        // Clear innerHTML as well
         recaptchaContainer.innerHTML = ''
+        // Remove any data attributes that might be set by reCAPTCHA
+        recaptchaContainer.removeAttribute('data-callback')
+        recaptchaContainer.removeAttribute('data-expired-callback')
       }
 
-      // Wait a bit before creating new reCAPTCHA
-      await new Promise(resolve => setTimeout(resolve, 300))
+      // Wait a bit before creating new reCAPTCHA to ensure DOM is clean
+      await new Promise(resolve => setTimeout(resolve, 500))
 
-      // Setup reCAPTCHA
-      const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-          console.log('reCAPTCHA solved')
-        },
-        'expired-callback': () => {
-          console.log('reCAPTCHA expired')
-          setError('reCAPTCHA expired. Please try again.')
-        },
-      })
+      // Check if container still exists and is empty
+      const containerCheck = document.getElementById('recaptcha-container')
+      if (!containerCheck) {
+        throw new Error('reCAPTCHA container not found')
+      }
+
+      // Setup reCAPTCHA with error handling
+      let recaptchaVerifier: RecaptchaVerifier
+      try {
+        recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible',
+          callback: () => {
+            console.log('reCAPTCHA solved')
+          },
+          'expired-callback': () => {
+            console.log('reCAPTCHA expired')
+            setError('reCAPTCHA expired. Please try again.')
+          },
+        })
+      } catch (verifierError: any) {
+        if (verifierError.message?.includes('already been rendered')) {
+          // If already rendered, clear and try again
+          const container = document.getElementById('recaptcha-container')
+          if (container) {
+            container.innerHTML = ''
+            await new Promise(resolve => setTimeout(resolve, 500))
+          }
+          recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            size: 'invisible',
+            callback: () => {
+              console.log('reCAPTCHA solved')
+            },
+            'expired-callback': () => {
+              console.log('reCAPTCHA expired')
+              setError('reCAPTCHA expired. Please try again.')
+            },
+          })
+        } else {
+          throw verifierError
+        }
+      }
 
       recaptchaVerifierRef.current = recaptchaVerifier
 

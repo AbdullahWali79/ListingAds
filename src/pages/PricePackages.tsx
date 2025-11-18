@@ -1,11 +1,10 @@
-import { useState, useEffect, FormEvent, ChangeEvent } from 'react'
+import { useState, useEffect, type FormEvent, type ChangeEvent } from 'react'
 import {
   collection,
   doc,
   onSnapshot,
   query,
   where,
-  updateDoc,
   setDoc,
   serverTimestamp,
   type Timestamp,
@@ -33,7 +32,7 @@ interface User {
 }
 
 const PricePackages = () => {
-  const { firebaseUser, userDoc } = useAuthContext()
+  const { userDoc: _userDoc } = useAuthContext()
   const [packages, setPackages] = useState<PricePackage[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)

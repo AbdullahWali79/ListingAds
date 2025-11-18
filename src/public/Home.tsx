@@ -3,9 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   collection,
   onSnapshot,
-  getDocs,
   query,
-  where,
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -40,7 +38,6 @@ interface Ad {
 const Home = () => {
   const [categories, setCategories] = useState<Category[]>([])
   const [recentAds, setRecentAds] = useState<Ad[]>([])
-  const [loading, setLoading] = useState(true)
   const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [adsLoading, setAdsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')

@@ -155,14 +155,14 @@ const PublicRegister = () => {
 
       // Create Firestore user document
       // Sellers need admin approval, buyers are auto-approved
-      const initialStatus = role === 'seller' ? 'pending' : 'approved';
+      const initialStatus: 'pending' | 'approved' = role === 'seller' ? 'pending' : 'approved';
       
       await setDoc(doc(db, 'users', user.uid), {
         name: name.trim(),
         email,
         phoneNumber: formattedPhone,
         role: role,
-        status: initialStatus as const,
+        status: initialStatus,
         profileImageUrl: profileImageUrl.trim() || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

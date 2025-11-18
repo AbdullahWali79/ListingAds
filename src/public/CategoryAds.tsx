@@ -4,7 +4,6 @@ import {
   collection,
   onSnapshot,
   query,
-  where,
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '../firebase'

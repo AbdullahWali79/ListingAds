@@ -1,6 +1,6 @@
-import { useEffect, useState, FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuthContext } from "../context/AuthContext";
 import { getRemainingDays } from "../utils/adExpiration";

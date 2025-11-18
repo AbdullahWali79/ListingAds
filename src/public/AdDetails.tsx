@@ -118,13 +118,13 @@ const AdDetails = () => {
           if (snapshot.exists()) {
             const data = snapshot.data()
             setSellerInfo({
-              phoneNumber: data.phoneNumber || null,
+              phoneNumber: data.phoneNumber || undefined,
               email: data.email || ad.sellerEmail,
               name: data.name || ad.sellerName,
             })
           } else {
             setSellerInfo({
-              phoneNumber: null,
+              phoneNumber: undefined,
               email: ad.sellerEmail,
               name: ad.sellerName,
             })
@@ -133,7 +133,7 @@ const AdDetails = () => {
         (err) => {
           console.error('Error fetching seller info:', err)
           setSellerInfo({
-            phoneNumber: null,
+            phoneNumber: undefined,
             email: ad.sellerEmail,
             name: ad.sellerName,
           })

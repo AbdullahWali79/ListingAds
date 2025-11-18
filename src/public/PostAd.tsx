@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { collection, addDoc, onSnapshot, query, where, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -628,7 +628,7 @@ const PostAd = () => {
                     name="package"
                     value="1day"
                     checked={selectedPackage === '1day'}
-                    onChange={(e) => setSelectedPackage('1day')}
+                    onChange={() => setSelectedPackage('1day')}
                     style={{ marginRight: '0.75rem', cursor: 'pointer' }}
                   />
                   <div style={{ flex: 1 }}>
@@ -654,7 +654,7 @@ const PostAd = () => {
                     name="package"
                     value="3days"
                     checked={selectedPackage === '3days'}
-                    onChange={(e) => setSelectedPackage('3days')}
+                    onChange={() => setSelectedPackage('3days')}
                     style={{ marginRight: '0.75rem', cursor: 'pointer' }}
                   />
                   <div style={{ flex: 1 }}>
@@ -680,7 +680,7 @@ const PostAd = () => {
                     name="package"
                     value="1week"
                     checked={selectedPackage === '1week'}
-                    onChange={(e) => setSelectedPackage('1week')}
+                    onChange={() => setSelectedPackage('1week')}
                     style={{ marginRight: '0.75rem', cursor: 'pointer' }}
                   />
                   <div style={{ flex: 1 }}>

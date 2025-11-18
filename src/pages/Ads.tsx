@@ -1,11 +1,9 @@
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import {
   collection,
   doc,
   onSnapshot,
   query,
-  where,
-  orderBy,
   updateDoc,
   addDoc,
   serverTimestamp,

@@ -3,7 +3,7 @@ import { useAuthContext } from '../context/AuthContext'
 
 const PublicHeader = () => {
   const navigate = useNavigate()
-  const { firebaseUser, userDoc, authLoading, logout } = useAuthContext()
+  const { firebaseUser, authLoading, logout } = useAuthContext()
 
   const handleLogout = async () => {
     try {
@@ -17,7 +17,6 @@ const PublicHeader = () => {
   return (
     <header
       style={{
-        backgroundColor: '#fff',
         borderBottom: '1px solid rgba(0,0,0,0.08)',
         padding: '1rem 2rem',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',

@@ -1,0 +1,71 @@
+═══════════════════════════════════════════════════════════════
+🚀 VERCEL DEPLOYMENT - QUICK STEPS
+═══════════════════════════════════════════════════════════════
+
+STEP 1: GITHUB PAR CODE PUSH
+───────────────────────────────────────────────────────────────
+1. GitHub par naya repository create karein
+2. Terminal mein ye commands run karein:
+   
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git remote add origin https://github.com/YOUR_USERNAME/ListingAds.git
+   git branch -M main
+   git push -u origin main
+
+
+STEP 2: VERCEL PAR PROJECT CREATE
+───────────────────────────────────────────────────────────────
+1. https://vercel.com par jayein
+2. "Sign Up" → "Continue with GitHub"
+3. "Add New..." → "Project"
+4. Apni GitHub repository select karein
+5. "Import" click karein
+
+
+STEP 3: ENVIRONMENT VARIABLES ADD KAREIN
+───────────────────────────────────────────────────────────────
+Vercel Dashboard → Settings → Environment Variables
+
+Har variable add karein (sab environments select karein):
+
+1. VITE_FIREBASE_API_KEY
+   = AIzaSyDkIG5Cuh48u8syommPl1eOoshBY7qbrps
+
+2. VITE_FIREBASE_AUTH_DOMAIN
+   = classified-ads-app-4f856.firebaseapp.com
+
+3. VITE_FIREBASE_PROJECT_ID
+   = classified-ads-app-4f856
+
+4. VITE_FIREBASE_STORAGE_BUCKET
+   = classified-ads-app-4f856.firebasestorage.app
+
+5. VITE_FIREBASE_MESSAGING_SENDER_ID
+   = 783962945706
+
+6. VITE_FIREBASE_APP_ID
+   = 1:783962945706:web:fb2141bfa104e780af38d3
+
+
+STEP 4: DEPLOY
+───────────────────────────────────────────────────────────────
+1. "Deploy" button click karein
+2. 2-3 minutes wait karein
+3. "Visit" button se app open karein
+
+
+STEP 5: FIREBASE DOMAIN ADD KAREIN
+───────────────────────────────────────────────────────────────
+1. Firebase Console → Authentication → Settings → Authorized domains
+2. Vercel domain add karein: your-project-name.vercel.app
+3. Save karein
+
+
+═══════════════════════════════════════════════════════════════
+✅ DONE! App live ho jayega
+═══════════════════════════════════════════════════════════════
+
+Detailed guide: VERCEL_DEPLOYMENT_STEPS.md file mein hai
+

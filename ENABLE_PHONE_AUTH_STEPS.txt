@@ -1,0 +1,59 @@
+═══════════════════════════════════════════════════════════════
+📱 PHONE AUTHENTICATION ENABLE KARNE KE STEPS
+═══════════════════════════════════════════════════════════════
+
+STEP 1: "Add new provider" BUTTON CLICK KAREIN
+───────────────────────────────────────────────────────────────
+Firebase Console mein jo "Add new provider" button dikh raha hai,
+us par CLICK karein.
+
+
+STEP 2: "Phone" PROVIDER SELECT KAREIN
+───────────────────────────────────────────────────────────────
+Dropdown menu mein se "Phone" option select karein.
+
+
+STEP 3: ENABLE TOGGLE ON KAREIN
+───────────────────────────────────────────────────────────────
+Phone provider settings mein:
+1. "Enable" toggle ko ON karein
+2. "Save" button click karein
+
+
+STEP 4: VERIFY KAREIN
+───────────────────────────────────────────────────────────────
+Sign-in providers list mein ab "Phone" dikhna chahiye with:
+✅ Status: "Enabled" (green checkmark)
+
+
+STEP 5: APP TEST KAREIN
+───────────────────────────────────────────────────────────────
+1. Registration page refresh karein
+2. Phone number enter karein
+3. "Send OTP" button click karein
+4. Ab OTP send hona chahiye! ✅
+
+
+═══════════════════════════════════════════════════════════════
+⚠️ IMPORTANT NOTES:
+═══════════════════════════════════════════════════════════════
+
+1. Phone Authentication enable hone ke baad, Firebase automatically
+   SMS bhejega real phone numbers par.
+
+2. Development ke liye test phone numbers add kar sakte hain:
+   - Phone provider settings → "Phone numbers for testing"
+   - Test number add karein with test OTP code
+
+3. Free tier mein limited SMS quota hai, isliye test numbers use
+   karein development ke liye.
+
+4. Agar Vercel par deploy kiya hai, to domain authorized honi chahiye:
+   - Authentication → Settings → Authorized domains
+   - Vercel domain add karein
+
+
+═══════════════════════════════════════════════════════════════
+✅ DONE! Ab OTP send hoga
+═══════════════════════════════════════════════════════════════
+

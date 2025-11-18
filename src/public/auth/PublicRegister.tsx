@@ -104,7 +104,9 @@ const PublicRegister = () => {
         recaptchaVerifierRef.current = null
       }
       
-      if (err.code === 'auth/too-many-requests') {
+      if (err.code === 'auth/operation-not-allowed') {
+        setError('Phone authentication is not enabled. Please contact admin or enable it in Firebase Console.')
+      } else if (err.code === 'auth/too-many-requests') {
         setError('Too many requests. Please try again later.')
       } else if (err.code === 'auth/invalid-phone-number') {
         setError('Invalid phone number. Please check and try again.')

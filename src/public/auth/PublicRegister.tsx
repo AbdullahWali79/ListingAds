@@ -29,8 +29,17 @@ const PublicRegister = () => {
     // Clean up on unmount
     return () => {
       if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear()
+        try {
+          recaptchaVerifierRef.current.clear()
+        } catch (clearError) {
+          console.log('Clearing reCAPTCHA on unmount:', clearError)
+        }
         recaptchaVerifierRef.current = null
+      }
+      // Clear container
+      const recaptchaContainer = document.getElementById('recaptcha-container')
+      if (recaptchaContainer) {
+        recaptchaContainer.innerHTML = ''
       }
     }
   }, [])
@@ -69,8 +78,22 @@ const PublicRegister = () => {
     try {
       // Clear existing reCAPTCHA if any
       if (recaptchaVerifierRef.current) {
-        recaptchaVerifierRef.current.clear()
+        try {
+          recaptchaVerifierRef.current.clear()
+        } catch (clearError) {
+          console.log('Clearing existing reCAPTCHA:', clearError)
+        }
+        recaptchaVerifierRef.current = null
       }
+
+      // Clear the container element
+      const recaptchaContainer = document.getElementById('recaptcha-container')
+      if (recaptchaContainer) {
+        recaptchaContainer.innerHTML = ''
+      }
+
+      // Wait a bit before creating new reCAPTCHA
+      await new Promise(resolve => setTimeout(resolve, 300))
 
       // Setup reCAPTCHA
       const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
@@ -106,6 +129,16 @@ const PublicRegister = () => {
       
       if (err.code === 'auth/operation-not-allowed') {
         setError('Phone authentication is not enabled. Please contact admin or enable it in Firebase Console.')
+      } else if (err.code === 'auth/billing-not-enabled') {
+        setError('Phone authentication requires billing to be enabled. Please enable billing in Firebase Console or contact admin.')
+      } else if (err.message?.includes('reCAPTCHA has already been rendered')) {
+        setError('Please wait a moment and try again. If the issue persists, refresh the page.')
+        // Clear container and reset
+        const recaptchaContainer = document.getElementById('recaptcha-container')
+        if (recaptchaContainer) {
+          recaptchaContainer.innerHTML = ''
+        }
+        recaptchaVerifierRef.current = null
       } else if (err.code === 'auth/too-many-requests') {
         setError('Too many requests. Please try again later.')
       } else if (err.code === 'auth/invalid-phone-number') {
@@ -418,8 +451,17 @@ const PublicRegister = () => {
                     setConfirmationResult(null)
                     setSuccessMessage('')
                     if (recaptchaVerifierRef.current) {
-                      recaptchaVerifierRef.current.clear()
+                      try {
+                        recaptchaVerifierRef.current.clear()
+                      } catch (clearError) {
+                        console.log('Clearing reCAPTCHA:', clearError)
+                      }
                       recaptchaVerifierRef.current = null
+                    }
+                    // Clear container
+                    const recaptchaContainer = document.getElementById('recaptcha-container')
+                    if (recaptchaContainer) {
+                      recaptchaContainer.innerHTML = ''
                     }
                   }
                   previousPhoneRef.current = newPhone
@@ -529,9 +571,19 @@ const PublicRegister = () => {
                     setOtp('')
                     setConfirmationResult(null)
                     setError('')
+                    setSuccessMessage('')
                     if (recaptchaVerifierRef.current) {
-                      recaptchaVerifierRef.current.clear()
+                      try {
+                        recaptchaVerifierRef.current.clear()
+                      } catch (clearError) {
+                        console.log('Clearing reCAPTCHA:', clearError)
+                      }
                       recaptchaVerifierRef.current = null
+                    }
+                    // Clear container
+                    const recaptchaContainer = document.getElementById('recaptcha-container')
+                    if (recaptchaContainer) {
+                      recaptchaContainer.innerHTML = ''
                     }
                   }}
                   style={{

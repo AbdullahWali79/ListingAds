@@ -32,7 +32,7 @@ interface User {
 }
 
 const PricePackages = () => {
-  const { userDoc: _userDoc } = useAuthContext()
+  const { userDoc: _userDoc } = useAuthContext() // Check admin access via context
   const [packages, setPackages] = useState<PricePackage[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)

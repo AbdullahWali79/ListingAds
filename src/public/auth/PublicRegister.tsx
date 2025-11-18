@@ -163,7 +163,7 @@ const PublicRegister = () => {
         phoneNumber: formattedPhone,
         role: role,
         status: initialStatus,
-        profileImageUrl: profileImageUrl.trim() || null,
+        profileImageUrl: profileImageUrl.trim() || undefined,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })

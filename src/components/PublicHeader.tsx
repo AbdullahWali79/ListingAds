@@ -18,18 +18,24 @@ const PublicHeader = () => {
     <header
       style={{
         backgroundColor: '#fff',
-        borderBottom: '1px solid #e0e0e0',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
         padding: '1rem 2rem',
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000,
+        backdropFilter: 'blur(10px)',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
       }}
     >
       <div
         style={{
-          maxWidth: '1200px',
+          maxWidth: '1400px',
           margin: '0 auto',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: '2rem',
         }}
       >
         <Link
@@ -37,20 +43,49 @@ const PublicHeader = () => {
           style={{
             textDecoration: 'none',
             color: '#333',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
           }}
         >
-          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '600' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontWeight: '800',
+            fontSize: '1.2rem',
+          }}>
+            A
+          </div>
+          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '700', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
             Classified Ads
           </h1>
         </Link>
-        <nav style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+        
+        <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: 'auto' }}>
           <Link
             to="/"
             style={{
               textDecoration: 'none',
               color: '#333',
               fontSize: '0.95rem',
-              fontWeight: '500',
+              fontWeight: '600',
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = '#f8f9fa'
+              e.currentTarget.style.color = '#667eea'
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent'
+              e.currentTarget.style.color = '#333'
             }}
           >
             Home
@@ -109,21 +144,24 @@ const PublicHeader = () => {
                   <button
                     onClick={() => navigate('/auth/register')}
                     style={{
-                      padding: '0.5rem 1rem',
-                      backgroundColor: '#007bff',
+                      padding: '0.6rem 1.5rem',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '4px',
+                      borderRadius: '25px',
                       cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      fontWeight: '500',
-                      transition: 'background-color 0.2s',
+                      fontSize: '0.9rem',
+                      fontWeight: '600',
+                      transition: 'all 0.3s',
+                      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
                     }}
                     onMouseOver={(e) => {
-                      e.currentTarget.style.backgroundColor = '#0056b3'
+                      e.currentTarget.style.transform = 'translateY(-2px)'
+                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)'
                     }}
                     onMouseOut={(e) => {
-                      e.currentTarget.style.backgroundColor = '#007bff'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)'
                     }}
                   >
                     Sign Up

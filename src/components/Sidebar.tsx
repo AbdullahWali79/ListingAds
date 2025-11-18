@@ -7,6 +7,7 @@ const Sidebar = () => {
     { path: '/admin/ads', label: 'Ads' },
     { path: '/admin/payments', label: 'Payments' },
     { path: '/admin/users', label: 'Users' },
+    { path: '/admin/price-packages', label: 'Price Packages' },
     { path: '/admin/blogs', label: 'Blogs' },
   ]
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import {
   collection,
   doc,
@@ -12,6 +12,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '../firebase'
+import { useAuthContext } from '../context/AuthContext'
 
 interface Ad {
   id: string
@@ -33,7 +34,15 @@ interface Ad {
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected'
 
+interface Category {
+  id: string
+  name: string
+  slug: string
+  isActive: boolean
+}
+
 const Ads = () => {
+  const { firebaseUser, userDoc } = useAuthContext()
   const [ads, setAds] = useState<Ad[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,6 +50,22 @@ const Ads = () => {
   const [selectedAd, setSelectedAd] = useState<Ad | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
+  const [imageUrlInputs, setImageUrlInputs] = useState<{ [key: string]: string }>({})
+  const [loadingImages, setLoadingImages] = useState<{ [key: string]: boolean }>({})
+  const [showImageModal, setShowImageModal] = useState(false)
+  const [selectedAdForImage, setSelectedAdForImage] = useState<Ad | null>(null)
+  
+  // Create Ad Modal States
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createAdLoading, setCreateAdLoading] = useState(false)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [newAd, setNewAd] = useState({
+    title: '',
+    description: '',
+    price: '',
+    categoryId: '',
+    imageUrl: '',
+  })
 
   // Format date
   const formatDate = (timestamp?: Timestamp): string => {
@@ -129,6 +154,182 @@ const Ads = () => {
 
     return () => unsubscribe()
   }, [statusFilter])
+
+  // Fetch categories for create ad form
+  useEffect(() => {
+    const categoriesQuery = query(collection(db, 'categories'))
+    const unsubscribe = onSnapshot(
+      categoriesQuery,
+      (snapshot) => {
+        const categoriesList: Category[] = []
+        snapshot.forEach((doc) => {
+          const data = doc.data()
+          if (data.isActive !== false) {
+            categoriesList.push({
+              id: doc.id,
+              name: data.name || '',
+              slug: data.slug || '',
+              isActive: data.isActive !== undefined ? data.isActive : true,
+            })
+          }
+        })
+        setCategories(categoriesList)
+      },
+      (err) => {
+        console.error('Error fetching categories:', err)
+      }
+    )
+    return () => unsubscribe()
+  }, [])
+
+  // Convert GitHub blob URL to raw URL
+  const convertGitHubUrl = (url: string): string => {
+    if (!url) return url
+    // Convert blob URL to raw URL
+    url = url.replace('github.com', 'raw.githubusercontent.com')
+    url = url.replace('/blob/', '/')
+    return url.trim()
+  }
+
+  // Load and validate image URL
+  const handleLoadImage = async (adId: string, url: string) => {
+    if (!url || !url.trim()) {
+      setError('Please enter an image URL')
+      return
+    }
+
+    setLoadingImages({ ...loadingImages, [adId]: true })
+    setError(null)
+
+    try {
+      // Convert GitHub blob URL to raw URL if needed
+      let imageUrl = convertGitHubUrl(url)
+
+      // Validate URL format
+      try {
+        new URL(imageUrl)
+      } catch {
+        setError('Invalid URL format')
+        setLoadingImages({ ...loadingImages, [adId]: false })
+        return
+      }
+
+      // Test if image loads
+      const img = new Image()
+      const imageLoadPromise = new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error('Image failed to load'))
+        img.src = imageUrl
+      })
+
+      // Wait for image to load (with timeout)
+      await Promise.race([
+        imageLoadPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Image load timeout')), 10000))
+      ])
+
+      // If image loaded successfully, save to Firestore
+      await updateDoc(doc(db, 'ads', adId), {
+        imageUrl: imageUrl,
+        updatedAt: serverTimestamp(),
+      })
+
+      // Update input state
+      setImageUrlInputs({
+        ...imageUrlInputs,
+        [adId]: imageUrl,
+      })
+
+      setError(null)
+    } catch (err: any) {
+      console.error('Error loading image:', err)
+      const errorMsg = err.message || 'Failed to load image. Please check the URL.'
+      setError(errorMsg)
+      
+      // If it's a GitHub blob URL, suggest raw URL
+      if (url.includes('github.com') && url.includes('/blob/')) {
+        const rawUrl = convertGitHubUrl(url)
+        setError(`Image load failed. Try using raw URL: ${rawUrl}`)
+      }
+    } finally {
+      setLoadingImages({ ...loadingImages, [adId]: false })
+    }
+  }
+
+  // Create Ad Handler
+  const handleCreateAd = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setError(null)
+
+    // Validation
+    if (!newAd.title.trim()) {
+      setError('Title is required')
+      return
+    }
+    if (!newAd.description.trim()) {
+      setError('Description is required')
+      return
+    }
+    const priceNum = parseFloat(newAd.price)
+    if (!newAd.price || isNaN(priceNum) || priceNum <= 0) {
+      setError('Please enter a valid price')
+      return
+    }
+    if (!newAd.categoryId) {
+      setError('Please select a category')
+      return
+    }
+    if (!firebaseUser || !userDoc) {
+      setError('User not found')
+      return
+    }
+
+    setCreateAdLoading(true)
+
+    try {
+      const selectedCategory = categories.find(cat => cat.id === newAd.categoryId)
+      if (!selectedCategory) {
+        setError('Selected category not found')
+        setCreateAdLoading(false)
+        return
+      }
+
+      // Create ad with approved status (admin doesn't need payment)
+      await addDoc(collection(db, 'ads'), {
+        title: newAd.title.trim(),
+        description: newAd.description.trim(),
+        price: priceNum,
+        categoryId: newAd.categoryId,
+        categoryName: selectedCategory.name,
+        categorySlug: selectedCategory.slug,
+        sellerId: firebaseUser.uid,
+        sellerName: userDoc.name || firebaseUser.displayName || 'Admin',
+        sellerEmail: userDoc.email || firebaseUser.email || '',
+        status: 'approved', // Admin ads are auto-approved
+        isDeleted: false,
+        imageUrl: newAd.imageUrl.trim() || null,
+        isAdminPost: true, // Mark as admin post
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+
+      // Reset form and close modal
+      setNewAd({
+        title: '',
+        description: '',
+        price: '',
+        categoryId: '',
+        imageUrl: '',
+      })
+      setShowCreateModal(false)
+      setError(null)
+    } catch (err: any) {
+      console.error('Error creating ad:', err)
+      setError(err.message || 'Failed to create ad')
+    } finally {
+      setCreateAdLoading(false)
+    }
+  }
 
   // Approve ad
   const handleApprove = async (id: string) => {
@@ -331,6 +532,28 @@ const Ads = () => {
         <h1 style={{ margin: 0, color: '#333' }}>Ads</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              transition: 'background-color 0.2s',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = '#218838'
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = '#28a745'
+            }}
+          >
+            + Create Ad
+          </button>
+          <button
             onClick={handleAddSampleAds}
             style={{
               padding: '0.5rem 1rem',
@@ -502,6 +725,248 @@ const Ads = () => {
         </div>
       )}
 
+      {/* Create Ad Modal */}
+      {showCreateModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: '1rem',
+          }}
+          onClick={() => setShowCreateModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: '#fff',
+              padding: '2rem',
+              borderRadius: '8px',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+              width: '100%',
+              maxWidth: '600px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#333' }}>
+              Create New Ad (Admin)
+            </h2>
+            <p style={{ marginBottom: '1.5rem', color: '#666', fontSize: '0.875rem' }}>
+              Admin ads are automatically approved. No payment required.
+            </p>
+
+            <form onSubmit={handleCreateAd}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '0.5rem',
+                    color: '#333',
+                    fontWeight: '500',
+                  }}
+                >
+                  Title *
+                </label>
+                <input
+                  type="text"
+                  value={newAd.title}
+                  onChange={(e) => setNewAd({ ...newAd, title: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                  placeholder="Enter ad title"
+                />
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '0.5rem',
+                    color: '#333',
+                    fontWeight: '500',
+                  }}
+                >
+                  Description *
+                </label>
+                <textarea
+                  value={newAd.description}
+                  onChange={(e) => setNewAd({ ...newAd, description: e.target.value })}
+                  required
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                  }}
+                  placeholder="Enter detailed description"
+                />
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '0.5rem',
+                    color: '#333',
+                    fontWeight: '500',
+                  }}
+                >
+                  Price (USD) *
+                </label>
+                <input
+                  type="number"
+                  value={newAd.price}
+                  onChange={(e) => setNewAd({ ...newAd, price: e.target.value })}
+                  required
+                  min="0"
+                  step="0.01"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                  placeholder="Enter price"
+                />
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '0.5rem',
+                    color: '#333',
+                    fontWeight: '500',
+                  }}
+                >
+                  Category *
+                </label>
+                <select
+                  value={newAd.categoryId}
+                  onChange={(e) => setNewAd({ ...newAd, categoryId: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    marginBottom: '0.5rem',
+                    color: '#333',
+                    fontWeight: '500',
+                  }}
+                >
+                  Image URL (Optional)
+                </label>
+                <input
+                  type="url"
+                  value={newAd.imageUrl}
+                  onChange={(e) => setNewAd({ ...newAd, imageUrl: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                  placeholder="https://example.com/image.jpg"
+                />
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.5rem',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false)
+                    setNewAd({
+                      title: '',
+                      description: '',
+                      price: '',
+                      categoryId: '',
+                      imageUrl: '',
+                    })
+                    setError(null)
+                  }}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createAdLoading}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: createAdLoading ? '#ccc' : '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: createAdLoading ? 'not-allowed' : 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                  }}
+                >
+                  {createAdLoading ? 'Creating...' : 'Create Ad'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Ads List */}
       <div
         style={{
@@ -621,38 +1086,54 @@ const Ads = () => {
                     }}
                   >
                     <td style={{ padding: '0.75rem' }}>
-                      {ad.imageUrl ? (
+                      <div style={{ position: 'relative' }}>
                         <img
-                          src={ad.imageUrl}
+                          src={ad.imageUrl || 'https://raw.githubusercontent.com/AbdullahWali79/AbdullahImages/main/new.jpg'}
                           alt={ad.title}
+                          onClick={() => {
+                            setSelectedAdForImage(ad)
+                            setShowImageModal(true)
+                          }}
                           style={{
                             width: '60px',
                             height: '60px',
                             objectFit: 'cover',
                             borderRadius: '4px',
                             border: '1px solid #e0e0e0',
+                            display: 'block',
+                            cursor: 'pointer',
                           }}
                           onError={(e) => {
-                            e.currentTarget.style.display = 'none'
-                            const placeholder = e.currentTarget.nextElementSibling as HTMLElement
-                            if (placeholder) placeholder.style.display = 'flex'
+                            // If user image fails, try default image
+                            const defaultImageUrl = 'https://raw.githubusercontent.com/AbdullahWali79/AbdullahImages/main/new.jpg'
+                            if (e.currentTarget.src !== defaultImageUrl && ad.imageUrl) {
+                              e.currentTarget.src = defaultImageUrl
+                            } else {
+                              // If default also fails, show placeholder
+                              e.currentTarget.style.display = 'none'
+                              const placeholder = e.currentTarget.nextElementSibling as HTMLElement
+                              if (placeholder) placeholder.style.display = 'flex'
+                            }
                           }}
                         />
-                      ) : null}
-                      <div
-                        style={{
-                          width: '60px',
-                          height: '60px',
-                          backgroundColor: '#e9ecef',
-                          borderRadius: '4px',
-                          display: ad.imageUrl ? 'none' : 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.75rem',
-                          color: '#999',
-                        }}
-                      >
-                        No Img
+                        <div
+                          style={{
+                            width: '60px',
+                            height: '60px',
+                            backgroundColor: '#e9ecef',
+                            borderRadius: '4px',
+                            display: 'none',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.75rem',
+                            color: '#999',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                          }}
+                        >
+                          No Img
+                        </div>
                       </div>
                     </td>
                     <td style={{ padding: '0.75rem', color: '#333' }}>
@@ -672,27 +1153,25 @@ const Ads = () => {
                           {ad.description}
                         </div>
                       )}
-                      <div style={{ marginTop: '0.5rem' }}>
+                      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <input
                           type="text"
-                          value={ad.imageUrl || ''}
-                          placeholder="Add Image URL"
-                          onChange={async (e) => {
-                            const newUrl = e.target.value.trim()
-                            if (newUrl !== (ad.imageUrl || '')) {
-                              try {
-                                await updateDoc(doc(db, 'ads', ad.id), {
-                                  imageUrl: newUrl || null,
-                                  updatedAt: serverTimestamp(),
-                                })
-                              } catch (err: any) {
-                                console.error('Error updating image URL:', err)
-                                setError(err.message || 'Failed to update image URL')
-                              }
+                          value={imageUrlInputs[ad.id] !== undefined ? imageUrlInputs[ad.id] : (ad.imageUrl || '')}
+                          placeholder="Paste Image URL here"
+                          onChange={(e) => {
+                            setImageUrlInputs({
+                              ...imageUrlInputs,
+                              [ad.id]: e.target.value,
+                            })
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleLoadImage(ad.id, imageUrlInputs[ad.id] || ad.imageUrl || '')
                             }
                           }}
                           style={{
-                            width: '100%',
+                            flex: 1,
+                            minWidth: '200px',
                             maxWidth: '300px',
                             padding: '0.25rem 0.5rem',
                             fontSize: '0.75rem',
@@ -700,6 +1179,77 @@ const Ads = () => {
                             borderRadius: '4px',
                           }}
                         />
+                        <button
+                          type="button"
+                          onClick={() => handleLoadImage(ad.id, imageUrlInputs[ad.id] || ad.imageUrl || '')}
+                          disabled={loadingImages[ad.id] || !imageUrlInputs[ad.id] && !ad.imageUrl}
+                          style={{
+                            padding: '0.25rem 0.75rem',
+                            backgroundColor: loadingImages[ad.id] ? '#ccc' : '#28a745',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: loadingImages[ad.id] ? 'not-allowed' : 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap',
+                            transition: 'background-color 0.2s',
+                          }}
+                          onMouseOver={(e) => {
+                            if (!loadingImages[ad.id]) {
+                              e.currentTarget.style.backgroundColor = '#218838'
+                            }
+                          }}
+                          onMouseOut={(e) => {
+                            if (!loadingImages[ad.id]) {
+                              e.currentTarget.style.backgroundColor = '#28a745'
+                            }
+                          }}
+                          title="Load and Save Image URL"
+                        >
+                          {loadingImages[ad.id] ? '⏳ Loading...' : '✅ Load Image'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const defaultImageUrl = 'https://raw.githubusercontent.com/AbdullahWali79/AbdullahImages/main/new.jpg'
+                            try {
+                              await updateDoc(doc(db, 'ads', ad.id), {
+                                imageUrl: defaultImageUrl,
+                                updatedAt: serverTimestamp(),
+                              })
+                              setImageUrlInputs({
+                                ...imageUrlInputs,
+                                [ad.id]: defaultImageUrl,
+                              })
+                              setError(null)
+                            } catch (err: any) {
+                              console.error('Error setting default image:', err)
+                              setError(err.message || 'Failed to set default image')
+                            }
+                          }}
+                          style={{
+                            padding: '0.25rem 0.75rem',
+                            backgroundColor: '#17a2b8',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap',
+                            transition: 'background-color 0.2s',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = '#138496'
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = '#17a2b8'
+                          }}
+                          title="Set Default Image (Ads List)"
+                        >
+                          📷 Use Default
+                        </button>
                       </div>
                     </td>
                     <td style={{ padding: '0.75rem', color: '#666' }}>
@@ -820,6 +1370,90 @@ const Ads = () => {
           </div>
         )}
       </div>
+
+      {/* Image View Modal */}
+      {showImageModal && selectedAdForImage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2000,
+          }}
+          onClick={() => {
+            setShowImageModal(false)
+            setSelectedAdForImage(null)
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '90%',
+              maxHeight: '90%',
+              position: 'relative',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setShowImageModal(false)
+                setSelectedAdForImage(null)
+              }}
+              style={{
+                position: 'absolute',
+                top: '-40px',
+                right: 0,
+                backgroundColor: '#fff',
+                color: '#333',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '0.5rem 1rem',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+              }}
+            >
+              Close (X)
+            </button>
+            <img
+              src={selectedAdForImage.imageUrl || 'https://raw.githubusercontent.com/AbdullahWali79/AbdullahImages/main/new.jpg'}
+              alt={selectedAdForImage.title}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '90vh',
+                objectFit: 'contain',
+                borderRadius: '8px',
+              }}
+            />
+            <div
+              style={{
+                marginTop: '1rem',
+                padding: '1rem',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                borderRadius: '8px',
+                color: '#333',
+              }}
+            >
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem' }}>{selectedAdForImage.title}</h3>
+              <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', color: '#666' }}>
+                {selectedAdForImage.description}
+              </p>
+              <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                <div><strong>Seller:</strong> {selectedAdForImage.sellerName}</div>
+                <div><strong>Email:</strong> {selectedAdForImage.sellerEmail}</div>
+                <div><strong>Category:</strong> {selectedAdForImage.categoryName}</div>
+                <div><strong>Price:</strong> {formatPrice(selectedAdForImage.price)}</div>
+                <div><strong>Status:</strong> {selectedAdForImage.status}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

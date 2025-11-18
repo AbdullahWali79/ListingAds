@@ -11,6 +11,7 @@ import Ads from './pages/Ads'
 import Payments from './pages/Payments'
 import Users from './pages/Users'
 import Blogs from './pages/Blogs'
+import PricePackages from './pages/PricePackages'
 import PublicLogin from './public/auth/PublicLogin'
 import PublicRegister from './public/auth/PublicRegister'
 import UserDashboard from './public/UserDashboard'
@@ -76,6 +77,7 @@ function App() {
           <Route path="payments" element={<Payments />} />
           <Route path="users" element={<Users />} />
           <Route path="blogs" element={<Blogs />} />
+          <Route path="price-packages" element={<PricePackages />} />
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
         </Route>
 

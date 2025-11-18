@@ -26,6 +26,14 @@ const PostAd = () => {
   const [paymentMethod, setPaymentMethod] = useState('')
   const [referenceNumber, setReferenceNumber] = useState('')
   const [paymentProofUrl, setPaymentProofUrl] = useState('')
+  // Package selection
+  const [selectedPackage, setSelectedPackage] = useState<'1day' | '3days' | '1week'>('1day')
+  const [packageDays, setPackageDays] = useState(1)
+  const [pricePackage, setPricePackage] = useState<{
+    package1Day: number
+    package3Days: number
+    package1Week: number
+  } | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [categoriesLoading, setCategoriesLoading] = useState(true)
@@ -36,6 +44,76 @@ const PostAd = () => {
       navigate('/dashboard')
     }
   }, [userDoc, navigate])
+
+  // Fetch price package for current user
+  useEffect(() => {
+    if (!firebaseUser || !userDoc || userDoc.role !== 'seller') return
+
+    const packagesQuery = query(
+      collection(db, 'pricePackages'),
+      where('userId', '==', firebaseUser.uid)
+    )
+    const unsubscribe = onSnapshot(
+      packagesQuery,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const data = snapshot.docs[0].data()
+          setPricePackage({
+            package1Day: data.package1Day || 5,
+            package3Days: data.package3Days || 15,
+            package1Week: data.package1Week || 35,
+          })
+          // Set default payment amount based on selected package
+          if (selectedPackage === '1day') {
+            setPaymentAmount(String(data.package1Day || 5))
+          } else if (selectedPackage === '3days') {
+            setPaymentAmount(String(data.package3Days || 15))
+          } else {
+            setPaymentAmount(String(data.package1Week || 35))
+          }
+        } else {
+          // Default packages if not set
+          setPricePackage({
+            package1Day: 5,
+            package3Days: 15,
+            package1Week: 35,
+          })
+          setPaymentAmount('5')
+        }
+      },
+      (err) => {
+        console.error('Error fetching price package:', err)
+        // Set defaults on error
+        setPricePackage({
+          package1Day: 5,
+          package3Days: 15,
+          package1Week: 35,
+        })
+        setPaymentAmount('5')
+      }
+    )
+    return () => unsubscribe()
+  }, [firebaseUser, userDoc, selectedPackage])
+
+  // Update package days and payment amount when package changes
+  useEffect(() => {
+    if (selectedPackage === '1day') {
+      setPackageDays(1)
+      if (pricePackage) {
+        setPaymentAmount(String(pricePackage.package1Day))
+      }
+    } else if (selectedPackage === '3days') {
+      setPackageDays(3)
+      if (pricePackage) {
+        setPaymentAmount(String(pricePackage.package3Days))
+      }
+    } else if (selectedPackage === '1week') {
+      setPackageDays(7)
+      if (pricePackage) {
+        setPaymentAmount(String(pricePackage.package1Week))
+      }
+    }
+  }, [selectedPackage, pricePackage])
 
   // Fetch active categories
   useEffect(() => {
@@ -175,6 +253,11 @@ const PostAd = () => {
         return
       }
 
+      // Calculate expiry date based on selected package
+      const now = new Date()
+      const expiresAt = new Date(now)
+      expiresAt.setDate(expiresAt.getDate() + packageDays)
+
       // Create ad in Firestore first (to get ad ID)
       const adDocRef = await addDoc(collection(db, 'ads'), {
         title: title.trim(),
@@ -189,6 +272,9 @@ const PostAd = () => {
         status: 'pending',
         isDeleted: false,
         imageUrl: imageUrl.trim() || null,
+        // Duration fields
+        durationDays: packageDays,
+        expiresAt: expiresAt,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
@@ -395,6 +481,229 @@ const PostAd = () => {
               }}
               placeholder="https://example.com/image.jpg"
             />
+            <div style={{ 
+              marginTop: '0.75rem', 
+              padding: '1rem', 
+              backgroundColor: '#f0f9ff', 
+              borderRadius: '8px',
+              border: '1px solid #bae6fd',
+            }}>
+              <p style={{ 
+                fontSize: '0.875rem', 
+                color: '#0369a1', 
+                margin: '0 0 0.75rem 0',
+                fontWeight: '600',
+              }}>
+                📸 How to Upload Image:
+              </p>
+              <ol style={{ 
+                margin: 0, 
+                paddingLeft: '1.25rem', 
+                fontSize: '0.8rem', 
+                color: '#0c4a6e',
+                lineHeight: '1.6',
+              }}>
+                <li style={{ marginBottom: '0.5rem' }}>Click on any image hosting website below</li>
+                <li style={{ marginBottom: '0.5rem' }}>Upload your image</li>
+                <li style={{ marginBottom: '0.5rem' }}>Copy the direct image URL</li>
+                <li>Paste the URL in the field above</li>
+              </ol>
+              <div style={{ 
+                marginTop: '0.75rem', 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '0.5rem' 
+              }}>
+                <a
+                  href="https://imgur.com/upload"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#1e40af',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '6px',
+                    fontSize: '0.8rem',
+                    fontWeight: '500',
+                    display: 'inline-block',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1e3a8a'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1e40af'}
+                >
+                  📷 Upload to Imgur
+                </a>
+                <a
+                  href="https://imgbb.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#059669',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '6px',
+                    fontSize: '0.8rem',
+                    fontWeight: '500',
+                    display: 'inline-block',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                >
+                  🖼️ Upload to ImgBB
+                </a>
+                <a
+                  href="https://postimages.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#7c3aed',
+                    color: 'white',
+                    textDecoration: 'none',
+                    borderRadius: '6px',
+                    fontSize: '0.8rem',
+                    fontWeight: '500',
+                    display: 'inline-block',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#6d28d9'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
+                >
+                  🎨 Upload to PostImages
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Package Selection Section */}
+          <div style={{ 
+            marginTop: '2rem', 
+            paddingTop: '2rem', 
+            borderTop: '2px solid #e5e7eb' 
+          }}>
+            <h2 style={{ 
+              fontSize: '1.25rem', 
+              fontWeight: '600', 
+              marginBottom: '1rem',
+              color: '#333'
+            }}>
+              Ad Duration Package
+            </h2>
+            <p style={{ 
+              fontSize: '0.875rem', 
+              color: '#666', 
+              marginBottom: '1.5rem' 
+            }}>
+              Select how long you want your ad to be displayed. Your ad will be active for the selected duration.
+            </p>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '0.5rem',
+                  color: '#333',
+                  fontWeight: '500',
+                }}
+              >
+                Select Package *
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '1rem',
+                    border: selectedPackage === '1day' ? '2px solid #007bff' : '1px solid #ddd',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: selectedPackage === '1day' ? '#f0f8ff' : 'white',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="package"
+                    value="1day"
+                    checked={selectedPackage === '1day'}
+                    onChange={(e) => setSelectedPackage('1day')}
+                    style={{ marginRight: '0.75rem', cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>1 Day Package</div>
+                    <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                      PKR {pricePackage?.package1Day || 5} - Your ad will be displayed for 1 day
+                    </div>
+                  </div>
+                </label>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '1rem',
+                    border: selectedPackage === '3days' ? '2px solid #007bff' : '1px solid #ddd',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: selectedPackage === '3days' ? '#f0f8ff' : 'white',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="package"
+                    value="3days"
+                    checked={selectedPackage === '3days'}
+                    onChange={(e) => setSelectedPackage('3days')}
+                    style={{ marginRight: '0.75rem', cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>3 Days Package</div>
+                    <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                      PKR {pricePackage?.package3Days || 15} - Your ad will be displayed for 3 days
+                    </div>
+                  </div>
+                </label>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '1rem',
+                    border: selectedPackage === '1week' ? '2px solid #007bff' : '1px solid #ddd',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: selectedPackage === '1week' ? '#f0f8ff' : 'white',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="package"
+                    value="1week"
+                    checked={selectedPackage === '1week'}
+                    onChange={(e) => setSelectedPackage('1week')}
+                    style={{ marginRight: '0.75rem', cursor: 'pointer' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>1 Week Package</div>
+                    <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                      PKR {pricePackage?.package1Week || 35} - Your ad will be displayed for 7 days
+                    </div>
+                  </div>
+                </label>
+              </div>
+              {selectedPackage && (
+                <div style={{ 
+                  marginTop: '1rem', 
+                  padding: '0.75rem', 
+                  backgroundColor: '#e7f3ff', 
+                  borderRadius: '4px',
+                  fontSize: '0.875rem',
+                  color: '#004085'
+                }}>
+                  <strong>Selected:</strong> Your ad will be displayed for <strong>{packageDays} {packageDays === 1 ? 'day' : 'days'}</strong> after admin approval.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Payment Section */}
@@ -448,7 +757,16 @@ const PostAd = () => {
                   boxSizing: 'border-box',
                 }}
                 placeholder="Enter payment amount"
+                readOnly
               />
+              <p style={{ 
+                fontSize: '0.75rem', 
+                color: '#666', 
+                marginTop: '0.25rem',
+                marginBottom: 0
+              }}>
+                Amount is automatically set based on selected package. Contact admin if you need to change it.
+              </p>
             </div>
 
             <div style={{ marginBottom: '1.5rem' }}>
@@ -542,14 +860,102 @@ const PostAd = () => {
                 }}
                 placeholder="https://example.com/payment-proof.jpg"
               />
-              <p style={{ 
-                fontSize: '0.75rem', 
-                color: '#666', 
-                marginTop: '0.25rem',
-                marginBottom: 0
+              <div style={{ 
+                marginTop: '0.75rem', 
+                padding: '1rem', 
+                backgroundColor: '#fef3c7', 
+                borderRadius: '8px',
+                border: '1px solid #fcd34d',
               }}>
-                Upload payment screenshot to image hosting service (e.g., imgur, imgbb) and paste the URL here
-              </p>
+                <p style={{ 
+                  fontSize: '0.875rem', 
+                  color: '#92400e', 
+                  margin: '0 0 0.75rem 0',
+                  fontWeight: '600',
+                }}>
+                  💳 How to Upload Payment Proof:
+                </p>
+                <ol style={{ 
+                  margin: 0, 
+                  paddingLeft: '1.25rem', 
+                  fontSize: '0.8rem', 
+                  color: '#78350f',
+                  lineHeight: '1.6',
+                }}>
+                  <li style={{ marginBottom: '0.5rem' }}>Take a screenshot of your payment proof</li>
+                  <li style={{ marginBottom: '0.5rem' }}>Click on any image hosting website below</li>
+                  <li style={{ marginBottom: '0.5rem' }}>Upload the screenshot</li>
+                  <li style={{ marginBottom: '0.5rem' }}>Copy the direct image URL</li>
+                  <li>Paste the URL in the field above</li>
+                </ol>
+                <div style={{ 
+                  marginTop: '0.75rem', 
+                  display: 'flex', 
+                  flexWrap: 'wrap', 
+                  gap: '0.5rem' 
+                }}>
+                  <a
+                    href="https://imgur.com/upload"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#1e40af',
+                      color: 'white',
+                      textDecoration: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.8rem',
+                      fontWeight: '500',
+                      display: 'inline-block',
+                      transition: 'background-color 0.2s',
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1e3a8a'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1e40af'}
+                  >
+                    📷 Upload to Imgur
+                  </a>
+                  <a
+                    href="https://imgbb.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#059669',
+                      color: 'white',
+                      textDecoration: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.8rem',
+                      fontWeight: '500',
+                      display: 'inline-block',
+                      transition: 'background-color 0.2s',
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                  >
+                    🖼️ Upload to ImgBB
+                  </a>
+                  <a
+                    href="https://postimages.org/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#7c3aed',
+                      color: 'white',
+                      textDecoration: 'none',
+                      borderRadius: '6px',
+                      fontSize: '0.8rem',
+                      fontWeight: '500',
+                      display: 'inline-block',
+                      transition: 'background-color 0.2s',
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#6d28d9'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
+                  >
+                    🎨 Upload to PostImages
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
 

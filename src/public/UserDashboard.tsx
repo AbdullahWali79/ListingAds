@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { collection, onSnapshot, query, where, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuthContext } from "../context/AuthContext";
+import { getRemainingDays } from "../utils/adExpiration";
 
 type MyAd = {
   id: string;
@@ -12,6 +13,8 @@ type MyAd = {
   status?: string;
   createdAt?: any;
   isDeleted?: boolean;
+  expiresAt?: Date | any;
+  durationDays?: number;
 };
 
 const UserDashboard: React.FC = () => {
@@ -19,6 +22,15 @@ const UserDashboard: React.FC = () => {
   const [myAds, setMyAds] = useState<MyAd[]>([]);
   const [adsLoading, setAdsLoading] = useState(false);
   const [adsError, setAdsError] = useState<string | null>(null);
+  const [showReactivationModal, setShowReactivationModal] = useState(false);
+  const [selectedAd, setSelectedAd] = useState<MyAd | null>(null);
+  const [reactivationData, setReactivationData] = useState({
+    paymentAmount: '',
+    paymentMethod: '',
+    referenceNumber: '',
+    paymentProofUrl: '',
+  });
+  const [reactivationLoading, setReactivationLoading] = useState(false);
 
   // Show loading while auth is loading
   if (authLoading) {
@@ -86,6 +98,12 @@ const UserDashboard: React.FC = () => {
         (snapshot) => {
           const items: MyAd[] = snapshot.docs.map((docSnap) => {
             const data = docSnap.data() as any;
+            // Convert expiresAt if it's a Firestore Timestamp
+            let expiresAt = data.expiresAt
+            if (expiresAt && expiresAt.toDate) {
+              expiresAt = expiresAt.toDate()
+            }
+            
             return {
               id: docSnap.id,
               title: data.title,
@@ -94,6 +112,8 @@ const UserDashboard: React.FC = () => {
               status: data.status,
               createdAt: data.createdAt,
               isDeleted: data.isDeleted,
+              expiresAt: expiresAt,
+              durationDays: data.durationDays,
             };
           });
           // filter out deleted ads if field exists
@@ -122,6 +142,12 @@ const UserDashboard: React.FC = () => {
               (snapshot) => {
                 const items: MyAd[] = snapshot.docs.map((docSnap) => {
                   const data = docSnap.data() as any;
+                  // Convert expiresAt if it's a Firestore Timestamp
+                  let expiresAt = data.expiresAt
+                  if (expiresAt && expiresAt.toDate) {
+                    expiresAt = expiresAt.toDate()
+                  }
+                  
                   return {
                     id: docSnap.id,
                     title: data.title,
@@ -130,6 +156,8 @@ const UserDashboard: React.FC = () => {
                     status: data.status,
                     createdAt: data.createdAt,
                     isDeleted: data.isDeleted,
+                    expiresAt: expiresAt,
+                    durationDays: data.durationDays,
                   };
                 });
                 const filtered = items.filter((ad) => !ad.isDeleted);
@@ -163,6 +191,54 @@ const UserDashboard: React.FC = () => {
       setAdsLoading(false);
     }
   }, [firebaseUser, role]);
+
+  // Handle reactivation request
+  const handleReactivationRequest = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!selectedAd || !firebaseUser || !userDoc) return
+
+    setReactivationLoading(true)
+    setAdsError(null)
+
+    try {
+      // Create reactivation request
+      await addDoc(collection(db, 'reactivationRequests'), {
+        adId: selectedAd.id,
+        adTitle: selectedAd.title || 'Untitled',
+        sellerId: firebaseUser.uid,
+        sellerName: userDoc.name || firebaseUser.displayName || 'Unknown',
+        sellerEmail: userDoc.email || firebaseUser.email || '',
+        paymentAmount: parseFloat(reactivationData.paymentAmount) || 0,
+        paymentMethod: reactivationData.paymentMethod,
+        referenceNumber: reactivationData.referenceNumber.trim() || null,
+        paymentProofUrl: reactivationData.paymentProofUrl.trim(),
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+
+      setShowReactivationModal(false)
+      setSelectedAd(null)
+      setReactivationData({
+        paymentAmount: '',
+        paymentMethod: '',
+        referenceNumber: '',
+        paymentProofUrl: '',
+      })
+      alert('Reactivation request submitted successfully! Admin will review it soon.')
+    } catch (err: any) {
+      console.error('Error submitting reactivation request:', err)
+      setAdsError(err.message || 'Failed to submit reactivation request')
+    } finally {
+      setReactivationLoading(false)
+    }
+  }
+
+  // Open reactivation modal
+  const openReactivationModal = (ad: MyAd) => {
+    setSelectedAd(ad)
+    setShowReactivationModal(true)
+  }
 
   return (
     <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '2.5rem 1rem' }}>
@@ -373,6 +449,11 @@ const UserDashboard: React.FC = () => {
                         ad.createdAt && ad.createdAt.toDate
                           ? ad.createdAt.toDate().toLocaleString()
                           : "-";
+                      
+                      // Check if ad is expired
+                      const remainingDays = ad.expiresAt ? getRemainingDays(ad.expiresAt) : null;
+                      const isExpired = remainingDays !== null && remainingDays <= 0;
+                      const showReactivation = (adStatus === 'pending' && isExpired) || (adStatus === 'pending' && remainingDays === null);
 
                       return (
                         <tr key={ad.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
@@ -421,8 +502,37 @@ const UserDashboard: React.FC = () => {
                             >
                               {adStatus.charAt(0).toUpperCase() + adStatus.slice(1)}
                             </span>
+                            {isExpired && (
+                              <span style={{ 
+                                marginLeft: '0.5rem',
+                                fontSize: '0.75rem',
+                                color: '#dc3545'
+                              }}>
+                                (Expired)
+                              </span>
+                            )}
                           </td>
-                          <td style={{ padding: '0.5rem 1rem 0.5rem 0' }}>{created}</td>
+                          <td style={{ padding: '0.5rem 1rem 0.5rem 0' }}>
+                            {created}
+                            {showReactivation && (
+                              <button
+                                onClick={() => openReactivationModal(ad)}
+                                style={{
+                                  marginTop: '0.5rem',
+                                  padding: '0.25rem 0.75rem',
+                                  backgroundColor: '#007bff',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem',
+                                  cursor: 'pointer',
+                                  display: 'block',
+                                }}
+                              >
+                                Request Reactivation
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -430,6 +540,274 @@ const UserDashboard: React.FC = () => {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Reactivation Modal */}
+      {showReactivationModal && selectedAd && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowReactivationModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: '#fff',
+              padding: '2rem',
+              borderRadius: '8px',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+              width: '90%',
+              maxWidth: '500px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: '1rem', color: '#333' }}>
+              Request Ad Reactivation
+            </h2>
+            <p style={{ marginBottom: '1.5rem', color: '#666', fontSize: '0.875rem' }}>
+              Your ad "{selectedAd.title || 'Untitled'}" has expired. Submit payment proof to reactivate it.
+            </p>
+            <form onSubmit={handleReactivationRequest}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#333', fontWeight: '500' }}>
+                  Payment Amount (PKR) *
+                </label>
+                <input
+                  type="number"
+                  value={reactivationData.paymentAmount}
+                  onChange={(e) => setReactivationData({ ...reactivationData, paymentAmount: e.target.value })}
+                  required
+                  min="0"
+                  step="0.01"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#333', fontWeight: '500' }}>
+                  Payment Method *
+                </label>
+                <select
+                  value={reactivationData.paymentMethod}
+                  onChange={(e) => setReactivationData({ ...reactivationData, paymentMethod: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="">Select payment method</option>
+                  <option value="bank">Bank Transfer</option>
+                  <option value="easypaisa">EasyPaisa</option>
+                  <option value="jazzcash">JazzCash</option>
+                  <option value="card">Card</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#333', fontWeight: '500' }}>
+                  Reference/Transaction Number (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={reactivationData.referenceNumber}
+                  onChange={(e) => setReactivationData({ ...reactivationData, referenceNumber: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', color: '#333', fontWeight: '500' }}>
+                  Payment Proof Image URL *
+                </label>
+                <input
+                  type="url"
+                  value={reactivationData.paymentProofUrl}
+                  onChange={(e) => setReactivationData({ ...reactivationData, paymentProofUrl: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '1rem',
+                    boxSizing: 'border-box',
+                  }}
+                  placeholder="https://example.com/payment-proof.jpg"
+                />
+                <div style={{ 
+                  marginTop: '0.75rem', 
+                  padding: '1rem', 
+                  backgroundColor: '#fef3c7', 
+                  borderRadius: '8px',
+                  border: '1px solid #fcd34d',
+                }}>
+                  <p style={{ 
+                    fontSize: '0.875rem', 
+                    color: '#92400e', 
+                    margin: '0 0 0.75rem 0',
+                    fontWeight: '600',
+                  }}>
+                    💳 How to Upload Payment Proof:
+                  </p>
+                  <ol style={{ 
+                    margin: 0, 
+                    paddingLeft: '1.25rem', 
+                    fontSize: '0.8rem', 
+                    color: '#78350f',
+                    lineHeight: '1.6',
+                  }}>
+                    <li style={{ marginBottom: '0.5rem' }}>Take a screenshot of your payment proof</li>
+                    <li style={{ marginBottom: '0.5rem' }}>Click on any image hosting website below</li>
+                    <li style={{ marginBottom: '0.5rem' }}>Upload the screenshot</li>
+                    <li style={{ marginBottom: '0.5rem' }}>Copy the direct image URL</li>
+                    <li>Paste the URL in the field above</li>
+                  </ol>
+                  <div style={{ 
+                    marginTop: '0.75rem', 
+                    display: 'flex', 
+                    flexWrap: 'wrap', 
+                    gap: '0.5rem' 
+                  }}>
+                    <a
+                      href="https://imgur.com/upload"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: '#1e40af',
+                        color: 'white',
+                        textDecoration: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: '500',
+                        display: 'inline-block',
+                        transition: 'background-color 0.2s',
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1e3a8a'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1e40af'}
+                    >
+                      📷 Upload to Imgur
+                    </a>
+                    <a
+                      href="https://imgbb.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: '#059669',
+                        color: 'white',
+                        textDecoration: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: '500',
+                        display: 'inline-block',
+                        transition: 'background-color 0.2s',
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                    >
+                      🖼️ Upload to ImgBB
+                    </a>
+                    <a
+                      href="https://postimages.org/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: '#7c3aed',
+                        color: 'white',
+                        textDecoration: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        fontWeight: '500',
+                        display: 'inline-block',
+                        transition: 'background-color 0.2s',
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#6d28d9'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#7c3aed'}
+                    >
+                      🎨 Upload to PostImages
+                    </a>
+                  </div>
+                </div>
+              </div>
+              {adsError && (
+                <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#fee', color: '#c33', borderRadius: '4px', fontSize: '0.875rem' }}>
+                  {adsError}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowReactivationModal(false)
+                    setSelectedAd(null)
+                    setReactivationData({
+                      paymentAmount: '',
+                      paymentMethod: '',
+                      referenceNumber: '',
+                      paymentProofUrl: '',
+                    })
+                    setAdsError(null)
+                  }}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reactivationLoading}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: reactivationLoading ? '#ccc' : '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: reactivationLoading ? 'not-allowed' : 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                  }}
+                >
+                  {reactivationLoading ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

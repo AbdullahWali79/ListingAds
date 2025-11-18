@@ -30,28 +30,61 @@ const Topbar = () => {
       }}
     >
       <h2 style={{ margin: 0, color: '#333' }}>Classified Ads Admin Panel</h2>
-      <button
-        onClick={handleLogout}
-        style={{
-          padding: '0.5rem 1rem',
-          backgroundColor: '#dc3545',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '0.875rem',
-          fontWeight: '500',
-          transition: 'background-color 0.2s',
-        }}
-        onMouseOver={(e) => {
-          e.currentTarget.style.backgroundColor = '#c82333'
-        }}
-        onMouseOut={(e) => {
-          e.currentTarget.style.backgroundColor = '#dc3545'
-        }}
-      >
-        Logout
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <button
+          onClick={() => {
+            // Open public website in new tab
+            const publicUrl = window.location.origin
+            window.open(publicUrl, '_blank')
+          }}
+          style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            transition: 'background-color 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = '#0056b3'
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = '#007bff'
+          }}
+          title="View Public Website in New Tab"
+        >
+          <span>👁️</span>
+          <span>View Public Site</span>
+        </button>
+        <button
+          onClick={handleLogout}
+          style={{
+            padding: '0.5rem 1rem',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            transition: 'background-color 0.2s',
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = '#c82333'
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = '#dc3545'
+          }}
+        >
+          Logout
+        </button>
+      </div>
     </div>
   )
 }

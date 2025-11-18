@@ -18,6 +18,7 @@ interface User {
   email: string
   role: 'user' | 'seller' | 'admin'
   status: 'approved' | 'pending' | 'blocked'
+  profileImageUrl?: string
   createdAt?: Timestamp
   updatedAt?: Timestamp
 }
@@ -79,6 +80,7 @@ const Users = () => {
             email: data.email || '',
             role: data.role || 'user',
             status: data.status || 'pending',
+            profileImageUrl: data.profileImageUrl || undefined,
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
           } as User)
@@ -740,7 +742,27 @@ const Users = () => {
                     }}
                   >
                     <td style={{ padding: '0.75rem', color: '#333', fontWeight: '500' }}>
-                      {user.name}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {user.profileImageUrl && (
+                          <img
+                            src={user.profileImageUrl}
+                            alt={user.name}
+                            onClick={() => window.open(user.profileImageUrl, '_blank')}
+                            style={{
+                              width: '40px',
+                              height: '40px',
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              cursor: 'pointer',
+                              border: '2px solid #ddd',
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        )}
+                        <span>{user.name}</span>
+                      </div>
                     </td>
                     <td style={{ padding: '0.75rem', color: '#666' }}>{user.email}</td>
                     <td style={{ padding: '0.75rem' }}>
